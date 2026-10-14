@@ -86,7 +86,7 @@ export async function serveVersions({ cwd = process.cwd(), base, head = "HEAD", 
     for (const [name, ref] of [["before", base], ["after", head]]) {
       const commit = git(root, "rev-parse", "--verify", `${ref}^{commit}`);
       const dir = mkdtempSync(join(tmpdir(), `changereel-${name}-`));
-      const side = { name, dir };
+      const side = { name, dir, commit };
       sides.push(side);
       git(root, "worktree", "add", "--detach", dir, commit);
       log(`${name}: ${ref} (${commit.slice(0, 7)})`);
@@ -101,5 +101,5 @@ export async function serveVersions({ cwd = process.cwd(), base, head = "HEAD", 
     await stop();
     throw err;
   }
-  return { before: sides[0].url, after: sides[1].url, stop };
+  return { before: sides[0].url, after: sides[1].url, commits: { before: sides[0].commit, after: sides[1].commit }, stop };
 }

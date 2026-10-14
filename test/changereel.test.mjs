@@ -254,6 +254,13 @@ describe("scenes", () => {
     assert.deepEqual([table.afterY, table.afterH], [100, 90]);
     assert.deepEqual(table.box, { x: 50, y: 2, width: 350, height: 86 });
     assert.deepEqual(table.boxBefore, { x: 50, y: 2, width: 330, height: 86 });
+    // A boxed change next to one without a box (a paragraph that grew): one scene around the
+    // span of both, with no box
+    const grew = change("changed", 130, { box: null, beforeH: 20, afterH: 60, span: { x: 40, width: 500 } });
+    const [mixed] = toScenes([site("/", row(100, 50), grew)], { perRoute: 2, maxScenes: 8 });
+    assert.equal(mixed.joined, 2);
+    assert.equal(mixed.box, null);
+    assert.deepEqual(mixed.span, { x: 40, width: 500 });
     // Far apart, or a different kind, they stay apart
     assert.equal(toScenes([site("/", row(100, 50), row(400, 50))], { perRoute: 2, maxScenes: 8 }).length, 2);
     assert.equal(toScenes([site("/", row(100, 50), change("added", 120))], { perRoute: 2, maxScenes: 8 }).length, 2);

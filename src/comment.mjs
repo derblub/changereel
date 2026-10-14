@@ -108,6 +108,7 @@ export async function dropPreviews({ token, repo, number, fetch: request = fetch
   const ref = await call("GET", `/git/ref/heads/${BRANCH}`);
   if (!ref) return 0;
   const parent = await call("GET", `/git/commits/${ref.object.sha}`);
+  if (!parent) return 0;
   const { tree } = await call("GET", `/git/trees/${parent.tree.sha}?recursive=1`);
   const gone = tree.filter((entry) => entry.type === "blob" && entry.path.startsWith(`pr-${number}/`));
   if (!gone.length) return 0;
@@ -190,4 +191,6 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => console.log(`::warning::No comment on the pull request: ${err.message}`));
+}

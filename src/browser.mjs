@@ -78,7 +78,19 @@ function connect(url) {
     ws.onopen = ok;
     ws.onerror = () => fail(new Error(`Cannot connect to ${url}`));
   });
-  return { opened, send, once, on, close: () => ws.close() };
+  // A browser that goes away mid-run (crashed, out of memory) fails every call that waits
+  // on it, instead of leaving the run hanging
+  let gone = null;
+  const lost = (why) => {
+    if (gone) return;
+    gone = new Error(why);
+    for (const call of pending.values()) call.fail(gone);
+    pending.clear();
+  };
+  ws.onclose = () => lost("The browser closed");
+  ws.addEventListener("error", () => lost("The connection to the browser failed"));
+  const guarded = (method, params, sessionId) => (gone ? Promise.reject(gone) : send(method, params, sessionId));
+  return { opened, send: guarded, once, on, close: () => ws.close(), lost };
 }
 
 /**
@@ -114,6 +126,7 @@ export async function openBrowser({ wait = 500 } = {}) {
     chrome.on("exit", (code) => fail(new Error(`Chromium exited (${code})`)));
   });
   const cdp = connect(endpoint);
+  chrome.on("exit", (code) => cdp.lost(`Chromium exited (${code})`));
   await cdp.opened;
   const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });
   const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
@@ -299,7 +312,7 @@ export async function openBrowser({ wait = 500 } = {}) {
     } else {
       layers.push({ name: "page", png: compared, x: 0, y: 0, shown: "page" });
     }
-    return { page, sharp: { page: sharpPage, window: sharpWindow ?? null }, layers };
+    return { page, compared, sharp: { page: sharpPage, window: sharpWindow ?? null }, layers };
   }
 
   /** Runs an expression in the page that was captured last. For looking into a finding. */

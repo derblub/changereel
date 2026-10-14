@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- The voice gets a sentence as it is said: "€18" as "18 euros", "250 g" as "250 grams", a quoted "NEW" as a word, a middle dot as a pause. The caption follows that form; the comment keeps the written sentence.
+- The sign that says which side is shown is a tab on the top edge of the recording, half on the stage, so it covers no footer either. A page that came or went as a whole gets no mark around it.
+- German: the plain sentence in German word order ("Auf der Startseite hat sich ein Teil der Seite geändert."), and "Neue Seite" / "Seite entfernt" for a page.
+- Fixes from a review: `--ignore` and the noise of several visits were lost when one version of a page scrolled as a whole and the other inside an element; a scrolling element whose width changed between the versions ended the run; the page could start below the top of the recording when the shorter version had less to scroll; a browser that died mid-run left the run hanging; `--help` and `--version` were taken from anywhere, also as the value of `--title`; the opening card showed `HEAD` instead of the commit; two routes with one slug ("/about" and "/about/") overwrote each other's screenshots; a boxed change joined with one that grew lost its frame; the span of a section that shrank was measured on the wrong picture; Piper behind `#!/usr/bin/env python3` never gave the time of each word; the comment step ended in a stack trace when the report was missing.
+- The README lists `--ready-timeout`, `--preview` and `--comment`, and SECURITY.md says what leaves the machine when you ask for it.
+
 ## [0.7.2] - 2026-10-14
 
 - `--before-label` and `--after-label` name the two versions on the opening card.

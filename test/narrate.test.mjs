@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { PNG } from "pngjs";
 import { parseArgs } from "../src/cli.mjs";
-import { cut, describe as describeScene, estimateWords, excerpts, isEmpty, narrate, plain, question, tidy, wavSeconds } from "../src/narrate.mjs";
+import { cut, describe as describeScene, estimateWords, excerpts, pythonOf, spoken, isEmpty, narrate, plain, question, tidy, wavSeconds } from "../src/narrate.mjs";
 
 /** A scene on a page of 400 by 2000 pixels with both pictures on disk. */
 function sample(change = {}) {
@@ -52,13 +52,31 @@ describe("narrate", () => {
   });
 
   test("the plain sentence and the question follow the language", () => {
-    assert.equal(plain({ type: "changed", route: "/", routes: 1 }, "de"), "Ein Teil der Seite hat sich geändert auf der Startseite.");
+    assert.equal(plain({ type: "changed", route: "/", routes: 1 }, "de"), "Auf der Startseite hat sich ein Teil der Seite geändert.");
+    assert.equal(plain({ type: "added", route: "/", routes: 3 }, "de"), "Auf 3 Seiten ist ein Teil der Seite neu.");
     assert.equal(plain({ type: "added", route: "/kontakt", routes: 1, page: true }, "de"), "Die Seite /kontakt ist neu.");
     assert.equal(plain({ type: "removed", route: "/", routes: 3 }, "xx"), "A part of the page was removed on 3 pages.");
     const german = question({}, { before: null, after: {} }, undefined, "de");
     assert.match(german, /Say that it was added\. Write the sentence in German\.$/);
     assert.doesNotMatch(german, /End the sentence/);
     assert.equal(question({}, { before: null, after: {} }, undefined, "xx"), question({}, { before: null, after: {} }));
+  });
+
+  test("the voice gets prices, units, badges and middle dots as they are said", () => {
+    assert.equal(spoken('A "NEW" badge priced €18 · 250 g was added.'), 'A "New" badge priced 18 euros, 250 grams was added.');
+    assert.equal(spoken("Plans priced €16 to €54, up 10% from $9.99."), "Plans priced 16 euros to 54 euros, up 10 percent from 9.99 dollars.");
+    // Letters that are a name stay letters, and a word in capitals outside quotes stays
+    assert.equal(spoken('The "AI" link and the CSS changed.'), 'The "AI" link and the CSS changed.');
+  });
+
+  test("the python of a piper command is read from its first line, also behind env", () => {
+    const dir = mkdtempSync(join(tmpdir(), "changereel-piper-"));
+    writeFileSync(join(dir, "direct"), "#!/opt/venv/bin/python3\nimport piper\n");
+    writeFileSync(join(dir, "viaenv"), "#!/usr/bin/env python3\nimport piper\n");
+    writeFileSync(join(dir, "binary"), "ELF\0\0");
+    assert.equal(pythonOf(join(dir, "direct")), "/opt/venv/bin/python3");
+    assert.equal(pythonOf(join(dir, "viaenv")), "python3");
+    assert.equal(pythonOf(join(dir, "binary")), null);
   });
 
   test("an answer is cut down to its first sentence", () => {

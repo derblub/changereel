@@ -128,8 +128,12 @@ export async function compare(options, log = console.log) {
   const browser = await openBrowser({ wait: options.wait });
   const pages = [];
   try {
+    const names = new Set();
     for (const route of routes) {
-      const name = slug(route);
+      // Two routes can have one slug ("/about" and "/about/"): the second gets a number
+      let name = slug(route);
+      for (let n = 2; names.has(name); n++) name = `${slug(route)}-${n}`;
+      names.add(name);
       const sides = {};
       for (const which of ["before", "after"]) {
         const side = await shoot(browser, options[which] + route, options);
@@ -145,6 +149,7 @@ export async function compare(options, log = console.log) {
       const { before, after } = sides;
       if (!before && !after) continue;
       const height = (buffer) => buffer.readUInt32BE(20); // IHDR
+      const width = (buffer) => buffer.readUInt32BE(16);
       const page = { route, changes: [] };
       if (!before || !after) {
         const there = before || after;
@@ -169,10 +174,17 @@ export async function compare(options, log = console.log) {
           const found = [];
           // A page that scrolls as a whole on one side and inside an element on the other has
           // no layers in common: then the whole pages are compared
-          const shared = before.layers.every((layer) => after.layers.some((l) => l.name === layer.name));
+          const shared =
+            before.layers.every((layer) => after.layers.some((l) => l.name === layer.name && width(l.png) === width(layer.png)));
+          // The whole page of a side, with what --ignore names left out and the noise of its
+          // layers painted over, each layer's boxes moved to where the layer sits on the page
+          const whole = (side) => {
+            const noise = side.layers.flatMap((layer) => layer.noise.map((box) => ({ ...box, x: box.x + layer.x, y: box.y + layer.y })));
+            return { name: "page", clean: paint(side.compared, noise), noise, unstable: side.layers.some((layer) => layer.unstable), x: 0, y: 0, shown: "page" };
+          };
           const pairs = shared
             ? before.layers.map((layer) => [layer, after.layers.find((l) => l.name === layer.name)])
-            : [[{ name: "page", clean: before.page, x: 0, y: 0, shown: "page" }, { name: "page", clean: after.page, x: 0, y: 0, shown: "page" }]];
+            : [[whole(before), whole(after)]];
           for (const [was, is] of pairs) {
             if (was.unstable || is.unstable) page.unstable = true;
             const suffix = was.shown === "window" ? "-window" : "";
@@ -257,8 +269,12 @@ export function joinNear(changes, gap = 96) {
     }
     const beforeY = Math.min(last.beforeY, change.beforeY);
     const afterY = Math.min(last.afterY, change.afterY);
-    const box = union(onPage(last.box, last.afterY), onPage(change.box, change.afterY));
-    const boxBefore = union(onPage(last.boxBefore, last.beforeY), onPage(change.boxBefore, change.beforeY));
+    // Boxes join into a box; a box next to a change without one (a section that grew) joins
+    // the spans, so that the frame still goes around what is drawn and not from edge to edge
+    const asSpan = (box, span) => (box ? { x: box.x, width: box.width } : span);
+    const bothBoxed = last.box && change.box;
+    const box = bothBoxed ? union(onPage(last.box, last.afterY), onPage(change.box, change.afterY)) : null;
+    const boxBefore = bothBoxed ? union(onPage(last.boxBefore, last.beforeY), onPage(change.boxBefore, change.beforeY)) : null;
     Object.assign(last, {
       beforeH: Math.max(last.beforeY + last.beforeH, change.beforeY + change.beforeH) - beforeY,
       afterH: Math.max(last.afterY + last.afterH, change.afterY + change.afterH) - afterY,
@@ -266,9 +282,9 @@ export function joinNear(changes, gap = 96) {
       afterY,
       box: relative(box, afterY),
       boxBefore: relative(boxBefore, beforeY) ?? undefined,
-      span: last.box || change.box ? undefined : spanUnion(last.span, change.span),
-      spanBefore: spanUnion(last.spanBefore, change.spanBefore) ?? undefined,
-      blank: last.blank === change.blank ? last.blank : undefined,
+      span: bothBoxed ? undefined : spanUnion(asSpan(last.box, last.span), asSpan(change.box, change.span)),
+      spanBefore: bothBoxed ? undefined : spanUnion(asSpan(last.boxBefore, last.spanBefore), asSpan(change.boxBefore, change.spanBefore)) ?? undefined,
+      blank: bothBoxed && last.blank === change.blank ? last.blank : undefined,
       joined: (last.joined ?? 1) + 1,
       order: Math.min(last.order, changes.indexOf(change)),
     });
@@ -420,11 +436,12 @@ All options: https://github.com/derblub/changereel#on-the-command-line`;
 
 async function main() {
   const argv = process.argv.slice(2);
-  if (argv.includes("--help") || argv.includes("-h") || !argv.length) {
+  // Only as the first word: "--title -h" is a title
+  if (["--help", "-h"].includes(argv[0]) || !argv.length) {
     console.log(USAGE);
     return;
   }
-  if (argv.includes("--version") || argv.includes("-v")) {
+  if (["--version", "-v"].includes(argv[0])) {
     const { version } = JSON.parse(readFileSync(join(HERE, "..", "package.json"), "utf8"));
     console.log(version);
     return;
@@ -465,7 +482,7 @@ async function main() {
     }
     const texts = textsFor(options.language);
     // A version by its short name: the host of a running site, seven characters of a commit
-    const short = (version) => (URL.canParse(version) ? new URL(version).host : /^[0-9a-f]{40}$/.test(version) ? version.slice(0, 7) : version);
+    const short = (version) => (/^https?:\/\//.test(version) ? new URL(version).host : /^[0-9a-f]{40}$/.test(version) ? version.slice(0, 7) : version);
     const props = {
       title: options.title,
       summary: texts.summary(total, changed.length, pages.length),
@@ -473,8 +490,8 @@ async function main() {
       facts: [
         [texts.changes, String(total)],
         [texts.pages, texts.of(changed.length, pages.length)],
-        [texts.before, options.beforeLabel || short(options.base ?? options.before)],
-        [texts.after, options.afterLabel || short(options.base ? options.head : options.after)],
+        [texts.before, options.beforeLabel || short(versions?.commits.before ?? options.before)],
+        [texts.after, options.afterLabel || short(versions?.commits.after ?? options.after)],
       ],
       scenes,
     };
@@ -495,7 +512,10 @@ async function main() {
   }
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, renderMarkdown(pages, pages.length));
   if (process.env.GITHUB_OUTPUT) {
-    appendFileSync(process.env.GITHUB_OUTPUT, `changes=${total}\npages=${changed.length}\nvideo=${video}\npreview=${preview}\nreport=${join(options.out, "changes.json")}\n`);
+    // The heredoc form: a path may hold what a single line cannot
+    const outputs = { changes: total, pages: changed.length, video, preview, report: join(options.out, "changes.json") };
+    const mark = `changereel-${Date.now().toString(36)}`;
+    appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(outputs).map(([key, value]) => `${key}<<${mark}\n${value}\n${mark}\n`).join(""));
   }
 }
 

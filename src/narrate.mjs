@@ -24,7 +24,24 @@ export function plain(scene, language = "en") {
   const { plain: words } = textsFor(language);
   if (scene.page) return words.page[scene.type](scene.route);
   const where = scene.routes > 1 ? words.onPages(scene.routes) : scene.route === "/" ? words.onHome : words.on(scene.route);
-  return `${words.part[scene.type]} ${where}.`;
+  return words.sentence(scene.type, where);
+}
+
+const CURRENCY = { "€": "euros", $: "dollars", "£": "pounds" };
+const UNITS = { g: "grams", kg: "kilograms", mg: "milligrams", ml: "millilitres", l: "litres", cm: "centimetres", mm: "millimetres", km: "kilometres", px: "pixels", "%": "percent" };
+
+/**
+ * A sentence as it is said: a voice reads "€18" as "euros eighteen", a quoted "NEW" letter
+ * by letter, and "250 g" as "two hundred fifty gee". The caption follows the voice word by
+ * word, so the caption shows this form too; the comment keeps the written one.
+ */
+export function spoken(text) {
+  return String(text)
+    .replace(/([€$£])\s?(\d+(?:[.,]\d+)*)/g, (_, sign, amount) => `${amount} ${CURRENCY[sign]}`)
+    .replace(/(\d)\s?(g|kg|mg|ml|l|cm|mm|km|px|%)\b/g, (_, digit, unit) => `${digit} ${UNITS[unit]}`)
+    .replace(/(\d)\s?%/g, "$1 percent")
+    .replace(/\s[·•]\s/g, ", ")
+    .replace(/"([A-Z]{3,})"/g, (_, word) => `"${word[0]}${word.slice(1).toLowerCase()}"`);
 }
 
 /** A rectangle of a picture as a PNG buffer, kept inside the picture. */
@@ -90,7 +107,8 @@ function ask(scene, sides, empty) {
   const rules =
     "Answer with one plain sentence of at most 18 words, in the past tense. " +
     "Name the thing itself, such as a button, a heading, a price or a section, and quote short text when text changed. " +
-    "Say only what can be seen. Do not mention a picture, an image or a screenshot. No preamble.";
+    "Say only what can be seen. Do not mention a picture, an image or a screenshot. No preamble. " +
+    "The sentence is read aloud: no symbols such as a middle dot, and a price as a number with its currency.";
   if (scene.page) {
     const kind = sides.after ? "added to" : "removed from";
     return `This is the top of a page that was ${kind} a website. What is the page about? ${rules} Begin with "A page".`;
@@ -288,7 +306,11 @@ export function pythonOf(piper) {
   for (const place of places) {
     try {
       const first = readFileSync(place, "utf8").split("\n", 1)[0];
-      if (first.startsWith("#!") && /python/.test(first)) return first.slice(2).trim().split(" ")[0];
+      if (first.startsWith("#!") && /python/.test(first)) {
+        // "#!/usr/bin/env python3": the python is the word after env
+        const words = first.slice(2).trim().split(/\s+/);
+        return words[0].endsWith("/env") ? words[1] : words[0];
+      }
       return null;
     } catch {
       // not there, or not readable: the next place
@@ -354,9 +376,9 @@ export async function narrate(scenes, out, options, log = console.log) {
     }
     if (options.voice) {
       scene.audio = `audio/${index + 1}.wav`;
-      const spoken = await speak(scene.text, join(out, scene.audio), options);
-      scene.seconds = spoken.seconds;
-      scene.words = spoken.words;
+      const said = await speak(spoken(scene.text), join(out, scene.audio), options);
+      scene.seconds = said.seconds;
+      scene.words = said.words;
     }
     log(`${index + 1}  ${scene.text}`);
   }

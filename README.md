@@ -59,7 +59,7 @@ Blank rows match anywhere, so bands are judged by their other rows, and more or 
 
 ## What it leaves out, so that a change is a change
 
-A real page is not the same picture on every visit. Compared with itself, the site this was tried on first reported 8 changes on 6 pages. The steps below bring that down, not to zero: a testimonial picked at random still gets through on some runs.
+A real page is not the same picture on every visit. Compared with itself, the site this was tried on first reported 8 changes on 6 pages. The steps below bring that down to 6, not to zero: a testimonial picked at random still gets through on some runs.
 
 - **It waits until the page has settled.** Parts that load when the browser is idle arrive after the load event. A page is captured when its markup and its heights have stopped moving.
 - **It visits every page more than once.** What differs between two visits of the same version, such as a random testimonial, is left out on both sides, together with what sits right next to it. A page on which it finds a change is visited twice more on both sides: a part that is random can look the same twice by chance, and shows as what it is on another visit.
@@ -133,7 +133,7 @@ Each version is built in its own git worktree, so two installs and two builds ru
 
 ## In a merge request on GitLab
 
-In GitLab CI the command line does the same, and `--comment` writes the comment on the merge request. GitLab plays a video in a comment, so the comment holds the video itself, with its sound, and no preview is needed; that works in a private project as well.
+In GitLab CI the command line does the same, and `--comment` writes the comment on the merge request. GitLab plays a video in a comment, so the comment holds the video itself, with its sound when it has a voice, and no preview is needed; that works in a private project as well.
 
 ```yaml
 changereel:
@@ -183,6 +183,7 @@ changereel --before https://example.com --after http://localhost:3000
 | `--build` | | Command that builds a version, run in each checkout. |
 | `--serve` | | Command that serves a version on `{port}`. |
 | `--before`, `--after` | | Instead of `--base`: addresses of two running sites. |
+| `--ready-timeout` | `120` | Seconds to wait for a served version to answer. |
 | `--routes` | | Paths to compare, separated by spaces. Empty reads them from the sitemaps of both sites. |
 | `--sitemap` | | URL or file of one sitemap to read the routes from instead. |
 | `--ignore` | | CSS selectors, separated by commas, of parts to leave out of the comparison: a random testimonial, an animated logo. They stay in the video. |
@@ -197,6 +198,8 @@ changereel --before https://example.com --after http://localhost:3000
 | `--per-route` | `2` | Scenes per page, largest change first. |
 | `--max-scenes` | `8` | Scenes in the video. |
 | `--no-video` | | Only compare and write `changes.json`. |
+| `--preview` | | A small animated picture of the video as well, `changereel.gif`. |
+| `--comment` | | In GitLab CI for a merge request: the comment on it. See [above](#in-a-merge-request-on-gitlab). |
 | `--narrate` | | Let a model say in one sentence what each change is. |
 | `--model` | `gemma3:4b` | The model that writes the sentences: one in Ollama that reads pictures, or `claude-…` at Anthropic. |
 | `--ollama` | `http://127.0.0.1:11434` | Where Ollama listens (or `OLLAMA_HOST`). |
@@ -208,7 +211,7 @@ Chrome or Chromium is found in the usual places; `CHROME_PATH` names another. Th
 
 ## With a voice
 
-With `--narrate`, every scene gets a sentence: "The price of the standing desk changed from 599 euros to 549 euros." A model that reads pictures writes it from the changed spot before and after, and with `--voice` it is spoken and the scene lasts as long as the sentence. The voice is [Piper](https://github.com/OHF-Voice/piper1-gpl) and always runs on the machine. For the model there are two ways.
+With `--narrate`, every scene gets a sentence: "A 'Subscriptions' link was added to the navigation between 'Shop' and 'Our roastery'." A model that reads pictures writes it from the changed spot before and after, and with `--voice` it is spoken and the scene lasts as long as the sentence. The voice is [Piper](https://github.com/OHF-Voice/piper1-gpl) and always runs on the machine. For the model there are two ways.
 
 **On your own machine**, in [Ollama](https://ollama.com). No screenshot of your site is sent anywhere.
 
@@ -240,7 +243,7 @@ How good the sentences are depends on the model. On seven changes of a real site
 
 The local times are from a graphics card with 12 GB. The small local model reads short text well, a changed price or a new label on a button, and is often wrong on a rewritten paragraph. No model is reliable enough to be read without the picture next to it, which is why the sentence is a caption under the page and not a report.
 
-While the voice speaks, the sentence next to the page follows it word by word: what is still to come is grey, what was said is white. Piper tells when each word is spoken if the `onnx` package is installed next to it (`pip install piper-tts onnx`); without it the times are guessed from the length of the words.
+While the voice speaks, the sentence under the page follows it word by word: what is still to come is grey, what was said is white. Piper tells when each word is spoken if the `onnx` package is installed next to it (`pip install piper-tts onnx`); without it the times are guessed from the length of the words. The voice gets the sentence as it is said, a price as "18 euros" and a badge "NEW" as a word, and the caption follows that form; the comment keeps the written one.
 
 With `--language de` the sentences and the words in the video are German ("Geändert", "Vorher", "Nachher"); text from the page is quoted as it is. Take a voice that speaks it, such as `de_DE-thorsten-medium`.
 

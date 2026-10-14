@@ -278,13 +278,12 @@ export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, 
       // most of the change lies below them, and the band says more than the box.
       const grew = Math.abs(band.afterH - band.beforeH) > Math.max(16, Math.min(band.beforeH, band.afterH) / 4);
       const whole = grew || !box;
-      const taller = band.afterH >= band.beforeH;
       if (whole) {
         changes.push({
           ...band,
           type: "changed",
           box: null,
-          span: taller ? drawnSpan(after, band.afterY, band.afterH) : drawnSpan(before, band.beforeY, band.beforeH),
+          span: drawnSpan(after, band.afterY, band.afterH),
           spanBefore: drawnSpan(before, band.beforeY, band.beforeH),
         });
       } else {

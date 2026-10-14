@@ -37,9 +37,13 @@ Before you open a pull request, run `npm test` and add an entry under "Unrelease
 | `src/routes.mjs` | Routes from a list or from the sitemaps of both sites |
 | `src/versions.mjs` | Two versions of a repository in git worktrees, built and served |
 | `src/cli.mjs` | The command line: options, the comparison of every route, scenes, the summary, the render |
-| `video/Reel.jsx` | The video, a Remotion composition: title, one scene per change, closing card |
+| `src/narrate.mjs`, `src/speak.py` | A sentence per scene from a model in Ollama or at Anthropic, spoken by Piper with the time of each word |
+| `src/comment.mjs`, `src/gitlab.mjs` | The comment on a GitHub pull request or a GitLab merge request, and the preview on its branch |
+| `src/texts.mjs` | The words of the video in English and German |
+| `video/Reel.jsx`, `video/geometry.mjs` | The video, a Remotion composition: title, one scene per change, closing card; its measures and arithmetic, tested apart |
 | `action.yml` | The GitHub Action |
 | `test/site/` | Two versions of a small site with six known changes, and a page that scrolls inside an element |
+| `docs/demo/` | The sample site of the demo in the README, and the script that renders it |
 | `docs/assets/` | Brand files. Do not edit or redraw them |
 
 The comparison uses no model and no service. Please keep it that way: what counts as a change has to be the same on every run.

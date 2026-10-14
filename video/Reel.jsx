@@ -164,7 +164,9 @@ const Scene = ({ scene, index, count, texts, previous }) => {
   // As in a recording, the page is scrolled to the place: two pushes of the wheel, each
   // running out, from further up and not from so far that it races
   const flick = (from, to) => interpolate(frame, [from, to], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
-  const lead = Math.min(wanted, 520) * (1 - 0.62 * flick(10, 30) - 0.38 * flick(27, 52));
+  const flicked = 1 - 0.62 * flick(10, 30) - 0.38 * flick(27, 52);
+  // Each side from no further up than its own top: a shorter page has less to scroll
+  const leadFor = (which) => Math.min(tops[which], 520) * flicked;
 
   // Once the page has come to rest the camera goes to the change. There the page before
   // stands still for a good second, the place marked with a dashed line, so that one has
@@ -174,6 +176,7 @@ const Scene = ({ scene, index, count, texts, previous }) => {
   const change = both ? marked + 44 : marked;
   const after = !hasBefore ? 1 : !hasAfter ? 0 : interpolate(frame, [change, change + 6], [0, 1], clamp);
   const side = after >= 0.5 ? "after" : "before";
+  const lead = leadFor(side);
 
   // The camera goes to a small change on a spring, and comes back before the scene ends
   const settle = { damping: 200, mass: 1, stiffness: 90 };
@@ -185,7 +188,8 @@ const Scene = ({ scene, index, count, texts, previous }) => {
   // into the place on the page after. How it looks says what the place is: a dashed line
   // around what was, hatched where there is nothing, a solid line in the accent around what
   // is now. Around it the page is dimmed a little, so the eye goes to the place at once.
-  const shown = interpolate(frame, [marked, marked + 12], [0, 1], clamp) - interpolate(frame, [length - 40, length - 24], [0, 1], clamp);
+  // A whole page that came or went needs no mark: it would only line the window
+  const shown = scene.page ? 0 : interpolate(frame, [marked, marked + 12], [0, 1], clamp) - interpolate(frame, [length - 40, length - 24], [0, 1], clamp);
   const morph = both ? interpolate(frame, [change, change + 14], [0, 1], { ...clamp, easing: reveal }) : hasAfter ? 1 : 0;
   const mix = (name) => rects.before[name] + (rects.after[name] - rects.before[name]) * morph;
   const mark = { left: mix("left"), top: mix("top") + lead * scale, width: mix("width"), height: mix("height") };
@@ -251,10 +255,10 @@ const Scene = ({ scene, index, count, texts, previous }) => {
               />
             )}
             <div style={{ position: "absolute", inset: 0, opacity: previous ? interpolate(frame, [3, 8], [0, 1], clamp) : 1 }}>
-              {hasBefore && page("before", tops.before - lead)}
+              {hasBefore && page("before", tops.before - leadFor("before"))}
               {hasAfter && (
                 <div style={{ position: "absolute", inset: 0, opacity: after }}>
-                  {page("after", tops.after - lead)}
+                  {page("after", tops.after - leadFor("after"))}
                 </div>
               )}
             </div>
@@ -282,26 +286,30 @@ const Scene = ({ scene, index, count, texts, previous }) => {
               ))}
             </div>
           </div>
-          {/* Which side this is, on the recording itself, where one looks */}
-          <span
-            style={{
-              position: "absolute",
-              // Below on the left: the top of a page holds its logo and its navigation
-              left: 20,
-              bottom: 20,
-              padding: "8px 16px 8px 18px",
-              borderRadius: 8,
-              ...label,
-              fontSize: 17,
-              color: side === "after" ? INK_DEEP : WHITE,
-              background: side === "after" ? TEAL : "rgba(19,19,21,0.86)",
-              boxShadow: side === "after" ? "0 6px 20px rgba(0,0,0,0.3)" : "0 0 0 1px rgba(255,255,255,0.28), 0 6px 20px rgba(0,0,0,0.3)",
-            }}
-          >
-            {side === "after" ? texts.after : texts.before}
-          </span>
         </div>
       </div>
+
+      {/* Which side this is: a tab on the top edge of the recording, half on the stage and
+          half on the page, where a page keeps little but the ground of its header */}
+      <span
+        style={{
+          position: "absolute",
+          left: WINDOW_X + WINDOW_W / 2,
+          top: WINDOW_Y,
+          transform: "translate(-50%, -50%)",
+          padding: "7px 16px 7px 18px",
+          borderRadius: 8,
+          ...label,
+          fontSize: 16,
+          lineHeight: "20px",
+          color: side === "after" ? INK_DEEP : WHITE,
+          background: side === "after" ? TEAL : "#3f3f46",
+          boxShadow: "0 0 0 1px rgba(255,255,255,0.22), 0 8px 24px rgba(0,0,0,0.45)",
+          opacity: appear.opacity ?? 1,
+        }}
+      >
+        {side === "after" ? texts.after : texts.before}
+      </span>
 
       {/* The sentence, as the subtitle of the recording */}
       {scene.text && (

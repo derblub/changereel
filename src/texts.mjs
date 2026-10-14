@@ -17,7 +17,7 @@ export const TEXTS = {
     of: (changed, pages) => `${changed} of ${pages}`,
     plain: {
       page: { added: (route) => `The page ${route} was added.`, removed: (route) => `The page ${route} was removed.` },
-      part: { added: "A part of the page was added", removed: "A part of the page was removed", changed: "A part of the page changed" },
+      sentence: (type, where) => `${{ added: "A part of the page was added", removed: "A part of the page was removed", changed: "A part of the page changed" }[type]} ${where}.`,
       onPages: (count) => `on ${count} pages`,
       onHome: "on the home page",
       on: (route) => `on ${route}`,
@@ -26,7 +26,7 @@ export const TEXTS = {
   de: {
     name: "German",
     kind: { added: "Neu", removed: "Entfernt", changed: "Geändert" },
-    page: (kind) => `${kind}: Seite`,
+    page: (kind) => ({ Neu: "Neue Seite", Entfernt: "Seite entfernt" })[kind] ?? `${kind}: Seite`,
     before: "Vorher",
     after: "Nachher",
     more: (count) => (count > 1 ? `und ${count} weitere Seiten` : "und eine weitere Seite"),
@@ -37,7 +37,8 @@ export const TEXTS = {
     of: (changed, pages) => `${changed} von ${pages}`,
     plain: {
       page: { added: (route) => `Die Seite ${route} ist neu.`, removed: (route) => `Die Seite ${route} wurde entfernt.` },
-      part: { added: "Ein Teil der Seite ist neu", removed: "Ein Teil der Seite wurde entfernt", changed: "Ein Teil der Seite hat sich geändert" },
+      sentence: (type, where) =>
+        `${where[0].toUpperCase()}${where.slice(1)} ${{ added: "ist ein Teil der Seite neu", removed: "wurde ein Teil der Seite entfernt", changed: "hat sich ein Teil der Seite geändert" }[type]}.`,
       onPages: (count) => `auf ${count} Seiten`,
       onHome: "auf der Startseite",
       on: (route) => `auf ${route}`,
