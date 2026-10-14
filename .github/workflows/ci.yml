@@ -27,6 +27,10 @@ jobs:
   # changes they were written to have and render the video.
   action:
     runs-on: ubuntu-latest
+    # In a pull request the action writes its comment
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v7
       - name: Make a repository with two versions
@@ -53,7 +57,4 @@ jobs:
       - run: test "${{ steps.reel.outputs.changes }}" = 6 && test -s "${{ steps.reel.outputs.video }}"
       - name: Every scene was spoken
         run: test -s "$(dirname "${{ steps.reel.outputs.report }}")/audio/5.wav"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: changereel
-          path: ${{ steps.reel.outputs.video }}
+      - run: test -n "${{ steps.reel.outputs.video-url }}"

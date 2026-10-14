@@ -72,7 +72,7 @@ What you know to be random, name with `--ignore`. On the site this was tried on,
 
 ## In a pull request
 
-The action builds and serves the base of the pull request and its head, compares them, writes the list of changes to the job summary and renders the video.
+The action builds and serves the base of the pull request and its head, compares them and renders the video. The pull request gets a comment with what changed on which page and the way to the video; a later run changes that comment instead of adding one. A pull request that changes no page gets no comment.
 
 ```yaml
 name: What changed
@@ -81,21 +81,18 @@ on: pull_request
 jobs:
   changereel:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # for the comment
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the base commit has to be there
       - uses: derblub/changereel@v0
-        id: reel
         with:
           build: npm ci && npm run build
           serve: npm run preview -- --port {port}
           ignore: .testimonial, .hero-video
-      - uses: actions/upload-artifact@v7
-        if: steps.reel.outputs.video
-        with:
-          name: what-changed
-          path: ${{ steps.reel.outputs.video }}
 ```
 
 | Input | Default | Description |
@@ -115,12 +112,17 @@ jobs:
 | `anthropic-api-key` | | Key for that model, from a secret. |
 | `voice` | | Piper voice that speaks the sentences, such as `en_US-lessac-medium`. Empty shows them as captions. |
 | `language` | `en` | Language of the sentences and of the words in the video: `en` or `de`. |
+| `upload` | `true` | Keep the video as an artifact of the run. |
+| `artifact-name` | `changereel` | Name of that artifact; each use of the action in one run needs its own. |
+| `comment` | `true` | Comment on the pull request. |
+| `github-token` | `github.token` | Token for the comment. |
 
 | Output | Description |
 | --- | --- |
 | `changes`, `pages` | Number of visible changes, and of pages that have one. |
 | `video` | Path to the video. Empty when nothing changed. |
 | `report` | Path to `changes.json`. |
+| `video-url` | Address of the artifact with the video. |
 
 Each version is built in its own git worktree, so two installs and two builds run in the job. The first render downloads the browser Remotion renders with, about 100 MB.
 

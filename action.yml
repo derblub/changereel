@@ -51,6 +51,18 @@ inputs:
   language:
     description: "Language of the sentences and of the words in the video: 'en' or 'de'."
     default: en
+  upload:
+    description: "'false' leaves the video on the runner. Otherwise it is kept as an artifact of the run."
+    default: "true"
+  artifact-name:
+    description: "Name of that artifact. Each use of the action in one run needs its own."
+    default: changereel
+  comment:
+    description: "'false' writes no comment. Otherwise a pull request gets one, with the changes and the way to the video, and later runs change it. The job needs 'pull-requests: write'."
+    default: "true"
+  github-token:
+    description: "Token for the comment."
+    default: ${{ github.token }}
 
 outputs:
   changes:
@@ -65,6 +77,9 @@ outputs:
   report:
     description: "Path to changes.json."
     value: ${{ steps.reel.outputs.report }}
+  video-url:
+    description: "Address of the artifact with the video. Empty when there is none."
+    value: ${{ steps.upload.outputs.artifact-url }}
 
 runs:
   using: composite
@@ -131,3 +146,18 @@ runs:
           args+=(--voice "$RUNNER_TEMP/changereel-voices/$IN_VOICE.onnx" --piper "$RUNNER_TEMP/changereel-piper/bin/piper")
         fi
         node "$GITHUB_ACTION_PATH/src/cli.mjs" "${args[@]}"
+    - uses: actions/upload-artifact@v7
+      id: upload
+      if: inputs.upload != 'false' && steps.reel.outputs.video != ''
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.reel.outputs.video }}
+    - name: Comment on the pull request
+      if: inputs.comment != 'false' && github.event.pull_request.number
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        CHANGEREEL_PR: ${{ github.event.pull_request.number }}
+        CHANGEREEL_VIDEO_URL: ${{ steps.upload.outputs.artifact-url }}
+        IN_REPORT: ${{ steps.reel.outputs.report }}
+      run: node "$GITHUB_ACTION_PATH/src/comment.mjs" "$(dirname "$IN_REPORT")"
