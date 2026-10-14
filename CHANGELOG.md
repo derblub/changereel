@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- A closed pull request gets its previews taken off the branch `changereel-previews`; the action does that when it runs on `closed`.
+- When one side of a page is shorter, both stand at its scroll as long as the change stays in view, so the page no longer jumps when it changes.
+
 ## [0.6.0] - 2026-10-14
 
 - The action comments on the pull request: what changed on which page, the sentence for each change when there is one, and the way to the video. A later run changes the comment instead of adding one; a pull request that changes no page gets none.

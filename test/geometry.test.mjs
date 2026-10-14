@@ -83,9 +83,16 @@ describe("geometry", () => {
     assert.deepEqual(empty, { before: true, after: false });
   });
 
-  test("each side keeps its own scroll when one page is shorter", () => {
-    const { tops } = plan(scene({ type: "changed", beforeY: 2600, beforeH: 40, afterY: 2600, afterH: 40, beforeHeight: 2800, box: { x: 0, y: 0, width: 100, height: 40 } }));
-    assert.equal(tops.after, 2600 + 20 - VIEW_H / 2);
+  test("when one page is shorter both stand at its scroll, so nothing jumps", () => {
+    const { tops, rects } = plan(scene({ type: "changed", beforeY: 2600, beforeH: 40, afterY: 2600, afterH: 40, beforeHeight: 2800, box: { x: 0, y: 0, width: 100, height: 40 } }));
     assert.equal(tops.before, 2800 - VIEW_H);
+    assert.equal(tops.after, tops.before);
+    assert.equal(rects.before.top, rects.after.top);
+  });
+
+  test("each side keeps its own scroll when the change would leave the window otherwise", () => {
+    // Much was added above the change: after, it lies far below where the short page ends
+    const { tops } = plan(scene({ type: "changed", beforeY: 1900, beforeH: 40, afterY: 2900, afterH: 40, beforeHeight: 2000, afterHeight: 3600, box: { x: 0, y: 0, width: 100, height: 40 } }));
+    assert.notEqual(tops.before, tops.after);
   });
 });

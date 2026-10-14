@@ -76,7 +76,10 @@ The action builds and serves the base of the pull request and its head, compares
 
 ```yaml
 name: What changed
-on: pull_request
+on:
+  pull_request:
+    # "closed" only takes the previews of the pull request off their branch
+    types: [opened, synchronize, reopened, closed]
 
 jobs:
   changereel:

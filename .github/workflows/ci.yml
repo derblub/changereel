@@ -4,12 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, closed]
 
 permissions:
   contents: read
 
 jobs:
   test:
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -34,6 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Make a repository with two versions
+        if: github.event.action != 'closed'
         run: |
           mkdir "$RUNNER_TEMP/shop" && cd "$RUNNER_TEMP/shop"
           git init -q -b main
@@ -57,7 +60,9 @@ jobs:
           voice: en_US-lessac-medium
         env:
           CHANGEREEL_CWD: ${{ runner.temp }}/shop
-      - run: test "${{ steps.reel.outputs.changes }}" = 6 && test -s "${{ steps.reel.outputs.video }}"
-      - name: Every scene was spoken
-        run: test -s "$(dirname "${{ steps.reel.outputs.report }}")/audio/5.wav"
-      - run: test -n "${{ steps.reel.outputs.video-url }}"
+      - name: It found the changes, spoke every scene and kept the video
+        if: github.event.action != 'closed'
+        run: |
+          test "${{ steps.reel.outputs.changes }}" = 6 && test -s "${{ steps.reel.outputs.video }}"
+          test -s "$(dirname "${{ steps.reel.outputs.report }}")/audio/5.wav"
+          test -n "${{ steps.reel.outputs.video-url }}"

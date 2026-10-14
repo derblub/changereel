@@ -87,23 +87,33 @@ outputs:
 runs:
   using: composite
   steps:
+    # A pull request that is closed only gets its previews taken off their branch
+    - name: Drop the previews of the closed pull request
+      if: github.event.action == 'closed'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        CHANGEREEL_PR: ${{ github.event.pull_request.number }}
+      run: node "$GITHUB_ACTION_PATH/src/comment.mjs" --drop
     # The comparison needs Node 22 or newer for its WebSocket. A job that already has it keeps its own.
     - name: Look for Node
       id: node
+      if: github.event.action != 'closed'
       shell: bash
       run: |
         major="$(node --version 2>/dev/null | sed 's/^v\([0-9]*\).*/\1/')"
         if [ "${major:-0}" -lt 22 ]; then echo "setup=true" >> "$GITHUB_OUTPUT"; fi
     - uses: actions/setup-node@v7
-      if: steps.node.outputs.setup == 'true'
+      if: github.event.action != 'closed' && steps.node.outputs.setup == 'true'
       with:
         node-version: 24
     - name: Install changereel
+      if: github.event.action != 'closed'
       shell: bash
       run: npm ci --omit=dev --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH"
     # The voice runs on the runner: Piper and the voice are fetched once per job
     - name: Install the voice
-      if: inputs.narrate != '' && inputs.voice != ''
+      if: github.event.action != 'closed' && inputs.narrate != '' && inputs.voice != ''
       shell: bash
       env:
         IN_VOICE: ${{ inputs.voice }}
@@ -115,6 +125,7 @@ runs:
         "$RUNNER_TEMP/changereel-piper/bin/python" -m piper.download_voices --data-dir "$RUNNER_TEMP/changereel-voices" "$IN_VOICE"
     - name: Compare
       id: reel
+      if: github.event.action != 'closed'
       shell: bash
       env:
         IN_NARRATE: ${{ inputs.narrate }}
@@ -154,14 +165,14 @@ runs:
         node "$GITHUB_ACTION_PATH/src/cli.mjs" "${args[@]}"
     - uses: actions/upload-artifact@v7
       id: upload
-      if: inputs.upload != 'false' && steps.reel.outputs.video != ''
+      if: github.event.action != 'closed' && inputs.upload != 'false' && steps.reel.outputs.video != ''
       with:
         name: ${{ inputs.artifact-name }}
         path: ${{ steps.reel.outputs.video }}
         # The video itself, not a zip with it
         archive: false
     - name: Comment on the pull request
-      if: inputs.comment != 'false' && github.event.pull_request.number
+      if: github.event.action != 'closed' && inputs.comment != 'false' && github.event.pull_request.number
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}

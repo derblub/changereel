@@ -3,6 +3,7 @@
  * when there is one, and the way to the video.
  *
  *   node comment.mjs <out dir>
+ *   node comment.mjs --drop        when the pull request is closed: its previews go
  *
  * Reads changes.json, reel.json and the preview changereel.gif from the out dir. Needs
  * GITHUB_TOKEN, GITHUB_REPOSITORY, the number of the pull request in CHANGEREEL_PR, the
@@ -89,6 +90,34 @@ export async function putPreview({ token, repo, path, content, fetch: request = 
 }
 
 /**
+ * Take the previews of a pull request off their branch, once it is closed. Gives back how
+ * many there were; none, or no branch at all, is not an error.
+ */
+export async function dropPreviews({ token, repo, number, fetch: request = fetch }) {
+  const api = `https://api.github.com/repos/${repo}`;
+  const headers = { authorization: `Bearer ${token}`, accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28", "content-type": "application/json" };
+  const call = async (method, url, body) => {
+    const response = await request(`${api}${url}`, { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) });
+    if (!response.ok && !(method === "GET" && response.status === 404)) throw new Error(`GitHub answered ${response.status} to ${method} ${url}`);
+    return response.ok ? response.json() : null;
+  };
+  const ref = await call("GET", `/git/ref/heads/${BRANCH}`);
+  if (!ref) return 0;
+  const parent = await call("GET", `/git/commits/${ref.object.sha}`);
+  const { tree } = await call("GET", `/git/trees/${parent.tree.sha}?recursive=1`);
+  const gone = tree.filter((entry) => entry.type === "blob" && entry.path.startsWith(`pr-${number}/`));
+  if (!gone.length) return 0;
+  // A path with no blob takes it out of the tree
+  const next = await call("POST", "/git/trees", {
+    base_tree: parent.tree.sha,
+    tree: gone.map((entry) => ({ path: entry.path, mode: "100644", type: "blob", sha: null })),
+  });
+  const commit = await call("POST", "/git/commits", { message: `Drop the previews of #${number}`, tree: next.sha, parents: [parent.sha] });
+  await call("PATCH", `/git/refs/heads/${BRANCH}`, { sha: commit.sha });
+  return gone.length;
+}
+
+/**
  * Write the comment, or change the one there is. With nothing changed and no comment yet,
  * nothing is written: a pull request that changes no page needs no word about it.
  */
@@ -114,10 +143,20 @@ export async function postComment({ token, repo, number, body, quiet = false, fe
 }
 
 async function main() {
+  const { GITHUB_TOKEN: token, GITHUB_REPOSITORY: repo, CHANGEREEL_PR: number } = process.env;
+  // A closed pull request needs no preview any more
+  if (process.argv[2] === "--drop") {
+    try {
+      console.log(`Dropped ${await dropPreviews({ token, repo, number })} preview(s) of #${number}`);
+    } catch (err) {
+      console.log(`::warning::The previews of #${number} stay: ${err.message}. The job needs "contents: write" for it.`);
+    }
+    return;
+  }
   const out = process.argv[2];
   const { checked, pages } = JSON.parse(readFileSync(join(out, "changes.json"), "utf8"));
   const reel = existsSync(join(out, "reel.json")) ? JSON.parse(readFileSync(join(out, "reel.json"), "utf8")) : {};
-  const { GITHUB_TOKEN: token, GITHUB_REPOSITORY: repo, CHANGEREEL_PR: number, CHANGEREEL_VIDEO_URL: videoUrl } = process.env;
+  const { CHANGEREEL_VIDEO_URL: videoUrl } = process.env;
   const runUrl =
     process.env.GITHUB_RUN_ID && `${process.env.GITHUB_SERVER_URL || "https://github.com"}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`;
   // The preview: kept on its branch under the number of the pull request and the commit

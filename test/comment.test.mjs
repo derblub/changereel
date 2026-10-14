@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { BRANCH, MARKER, commentBody, postComment, putPreview } from "../src/comment.mjs";
+import { BRANCH, MARKER, commentBody, dropPreviews, postComment, putPreview } from "../src/comment.mjs";
 
 const pages = [
   { route: "/", changes: [{ type: "added" }, { type: "changed" }] },
@@ -91,5 +91,28 @@ describe("comment", () => {
   test("a private repository gets no preview", async () => {
     const fetch = async () => ({ ok: true, json: async () => ({ private: true }) });
     assert.equal(await putPreview({ token: "t", repo: "o/r", path: "x.gif", content: Buffer.from("GIF"), fetch }), null);
+  });
+
+  test("a closed pull request takes only its own previews off the branch", async () => {
+    const sent = [];
+    const fetch = async (url, init = {}) => {
+      const method = init.method || "GET";
+      sent.push({ method, url: url.replace("https://api.github.com/repos/o/r", ""), body: init.body && JSON.parse(init.body) });
+      if (url.includes("/git/ref/heads/")) return { ok: true, json: async () => ({ object: { sha: "c1" } }) };
+      if (url.includes("/git/commits/c1")) return { ok: true, json: async () => ({ sha: "c1", tree: { sha: "t1" } }) };
+      if (url.includes("/git/trees/t1")) {
+        return { ok: true, json: async () => ({ tree: [{ type: "tree", path: "pr-7" }, { type: "blob", path: "pr-7/a.gif" }, { type: "blob", path: "pr-70/b.gif" }] }) };
+      }
+      return { ok: true, json: async () => ({ sha: "new" }) };
+    };
+    assert.equal(await dropPreviews({ token: "t", repo: "o/r", number: 7, fetch }), 1);
+    const tree = sent.find((call) => call.method === "POST" && call.url === "/git/trees");
+    assert.deepEqual(tree.body.tree, [{ path: "pr-7/a.gif", mode: "100644", type: "blob", sha: null }]);
+    assert.equal(sent.at(-1).method, "PATCH");
+  });
+
+  test("without the branch there is nothing to drop", async () => {
+    const fetch = async () => ({ ok: false, status: 404, json: async () => ({}) });
+    assert.equal(await dropPreviews({ token: "t", repo: "o/r", number: 7, fetch }), 0);
   });
 });

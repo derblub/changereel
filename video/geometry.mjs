@@ -65,10 +65,21 @@ export function plan(scene) {
   const wanted = onAfter
     ? scrollFor(scene.afterY, scene.afterH, scene.afterHeight)
     : scrollFor(scene.beforeY, scene.beforeH, scene.beforeHeight);
-  const tops = {
+  let tops = {
     before: Math.min(wanted, Math.max(0, scene.beforeHeight - VIEW_H)),
     after: Math.min(wanted, Math.max(0, scene.afterHeight - VIEW_H)),
   };
+  // When one page is shorter it cannot be scrolled as far, and the page would jump when it
+  // changes. Both then stand at the shorter scroll, as long as the change stays in view on
+  // both sides there; it sits lower in the window, but nothing around it moves.
+  if (tops.before !== tops.after) {
+    const common = Math.min(tops.before, tops.after);
+    const inView = (which) => {
+      const y = scene[`${which}Y`] - common;
+      return !scene[`${which}H`] || (y >= 0 && y + Math.min(scene[`${which}H`], VIEW_H / 2) <= VIEW_H);
+    };
+    if (inView("before") && inView("after")) tops = { before: common, after: common };
+  }
   // The place on each side, in the window: around the changed pixels, or around what is
   // drawn in a section that came or went. Each side is measured on its own page, so the
   // mark sits right on the page before as well. Where a side has nothing (a section that
