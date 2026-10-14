@@ -238,10 +238,25 @@ describe("scenes", () => {
     assert.equal(scenes[0].pageWidth, 1280);
   });
 
-  test("perRoute and maxScenes limit what is shown", () => {
-    const pages = [site("/", change("changed", 1), change("changed", 2), change("changed", 3)), site("/b", change("changed", 4))];
-    assert.equal(toScenes(pages, { perRoute: 1, maxScenes: 8 }).length, 2);
+  test("each route gets its share first, and room left in the video goes to the rest", () => {
+    const pages = [site("/", change("added", 100), change("added", 300), change("added", 500)), site("/b", change("added", 700))];
+    // Without limit of room: all, the route's held back one too
+    assert.deepEqual(toScenes(pages, { perRoute: 1, maxScenes: 8 }).map((s) => [s.route, s.afterY]), [["/", 100], ["/", 300], ["/", 500], ["/b", 700]]);
+    // With little room: first one per route, then what is left
+    assert.deepEqual(toScenes(pages, { perRoute: 1, maxScenes: 3 }).map((s) => [s.route, s.afterY]), [["/", 100], ["/", 300], ["/b", 700]]);
     assert.equal(toScenes(pages, { perRoute: 3, maxScenes: 2 }).length, 2);
+  });
+
+  test("changes close together on one page are one scene, around all of them", () => {
+    const row = (y, x) => change("changed", y, { box: { x, y: 2, width: 100, height: 6 }, boxBefore: { x, y: 2, width: 80, height: 6 } });
+    const [table] = toScenes([site("/", row(100, 50), row(140, 300), row(180, 50))], { perRoute: 2, maxScenes: 8 });
+    assert.equal(table.joined, 3);
+    assert.deepEqual([table.afterY, table.afterH], [100, 90]);
+    assert.deepEqual(table.box, { x: 50, y: 2, width: 350, height: 86 });
+    assert.deepEqual(table.boxBefore, { x: 50, y: 2, width: 330, height: 86 });
+    // Far apart, or a different kind, they stay apart
+    assert.equal(toScenes([site("/", row(100, 50), row(400, 50))], { perRoute: 2, maxScenes: 8 }).length, 2);
+    assert.equal(toScenes([site("/", row(100, 50), change("added", 120))], { perRoute: 2, maxScenes: 8 }).length, 2);
   });
 });
 

@@ -44,7 +44,8 @@ export function commentBody({ pages, checked, scenes = [], videoUrl, previewUrl,
       const what = told && scene.told ? cell(scene.text) : `${KIND[scene.type]}${scene.page ? " page" : ""}`;
       lines.push(`| ${index + 1} | ${page} | ${what} |`);
     });
-    const shown = scenes.reduce((sum, scene) => sum + (scene.routes || 1), 0);
+    // A scene can stand for several changes: on several pages, or close together on one
+    const shown = scenes.reduce((sum, scene) => sum + (scene.routes || 1) * (scene.joined || 1), 0);
     if (total > shown) lines.push("", `${total - shown} more in the report of the run.`);
   } else {
     lines.push("| Page | Change |", "| --- | --- |");
@@ -52,7 +53,8 @@ export function commentBody({ pages, checked, scenes = [], videoUrl, previewUrl,
       for (const change of page.changes) lines.push(`| \`${cell(page.route)}\` | ${KIND[change.type]}${change.page ? " page" : ""} |`);
     }
   }
-  if (videoUrl) lines.push("", `**[Watch the video](${videoUrl})**${previewUrl ? ", with its sound" : ""}`);
+  const spoken = scenes.some((scene) => scene.audio);
+  if (videoUrl) lines.push("", `**[Watch the video](${videoUrl})**${spoken ? ", with its sound" : ""}`);
   if (changed.some((page) => page.unstable)) {
     lines.push("", "<sub>Parts of some pages differ between two visits of the same version and were left out.</sub>");
   }

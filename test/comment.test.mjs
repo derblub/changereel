@@ -69,6 +69,18 @@ describe("comment", () => {
     assert.equal(await postComment({ token: "t", repo: "o/r", number: 7, body: "none now", quiet: true, fetch: again.fetch }), "updated");
   });
 
+  test("the video is said to have sound only when it has", () => {
+    const silent = commentBody({ pages, checked: 3, scenes: [{ route: "/", routes: 1, type: "added" }], videoUrl: "v" });
+    assert.doesNotMatch(silent, /sound/);
+    const spoken = commentBody({ pages, checked: 3, scenes: [{ route: "/", routes: 1, type: "added", audio: "audio/1.wav" }], videoUrl: "v" });
+    assert.match(spoken, /with its sound/);
+  });
+
+  test("a scene that stands for several changes counts them all", () => {
+    const body = commentBody({ pages, checked: 3, scenes: [{ route: "/", routes: 1, type: "changed", joined: 3 }] });
+    assert.doesNotMatch(body, /more in the report/);
+  });
+
   test("the moving picture comes first and leads to the video", () => {
     const body = commentBody({ pages, checked: 3, videoUrl: "https://example.test/video", previewUrl: "https://example.test/p.gif" });
     assert.match(body, /\[!\[What changed\]\(https:\/\/example\.test\/p\.gif\)\]\(https:\/\/example\.test\/video\)/);

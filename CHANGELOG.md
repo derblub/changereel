@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- Changes close together on one page are one scene, framed around all of them. The rows of a table whose cells moved on were each a scene of their own, and a model shown one row told something false.
+- Each route gets its share of the video first; room left over goes to the changes held back, so a site of one page shows all its changes.
+- The same change twice on one page is no longer counted as on two pages.
+- The comment says the video has sound only when it has.
+
 ## [0.7.0] - 2026-10-14
 
 - GitLab: in a CI job for a merge request, `--comment` writes a comment on it with the video itself, which GitLab plays, and what changed on which page. A later run changes the comment. Needs a project access token in `CHANGEREEL_GITLAB_TOKEN`.

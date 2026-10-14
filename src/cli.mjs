@@ -225,15 +225,70 @@ export async function compare(options, log = console.log) {
 }
 
 /**
+ * Changes of one page that lie close together, joined into one: the rows of a table whose
+ * cells moved on are each a change of their own, and each alone says something false (a
+ * row that lost a name it only passed on to the next). Only changes of the same kind
+ * "changed" in the same layer are joined; something added next to something changed stays
+ * two scenes.
+ */
+export function joinNear(changes, gap = 96) {
+  const parts = changes.filter((change) => !change.page && change.type === "changed").sort((a, b) => a.afterY - b.afterY);
+  const rest = changes.filter((change) => !parts.includes(change));
+  const joined = [];
+  // A rectangle in page coordinates, from a box that is measured from the top of its band
+  const onPage = (box, y) => box && { x: box.x, y: y + box.y, right: box.x + box.width, bottom: y + box.y + box.height };
+  const union = (a, b) => a && b && { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) };
+  const relative = (rect, y) => rect && { x: rect.x, y: rect.y - y, width: rect.right - rect.x, height: rect.bottom - rect.y };
+  const spanUnion = (a, b) => a && b && { x: Math.min(a.x, b.x), width: Math.max(a.x + a.width, b.x + b.width) - Math.min(a.x, b.x) };
+  for (const change of parts) {
+    const last = joined.at(-1);
+    const near =
+      last &&
+      last.layer === change.layer &&
+      last.view?.before === change.view?.before &&
+      change.beforeY - (last.beforeY + last.beforeH) <= gap &&
+      change.afterY - (last.afterY + last.afterH) <= gap;
+    if (!near) {
+      joined.push({ ...change, order: changes.indexOf(change) });
+      continue;
+    }
+    const beforeY = Math.min(last.beforeY, change.beforeY);
+    const afterY = Math.min(last.afterY, change.afterY);
+    const box = union(onPage(last.box, last.afterY), onPage(change.box, change.afterY));
+    const boxBefore = union(onPage(last.boxBefore, last.beforeY), onPage(change.boxBefore, change.beforeY));
+    Object.assign(last, {
+      beforeH: Math.max(last.beforeY + last.beforeH, change.beforeY + change.beforeH) - beforeY,
+      afterH: Math.max(last.afterY + last.afterH, change.afterY + change.afterH) - afterY,
+      beforeY,
+      afterY,
+      box: relative(box, afterY),
+      boxBefore: relative(boxBefore, beforeY) ?? undefined,
+      span: last.box || change.box ? undefined : spanUnion(last.span, change.span),
+      spanBefore: spanUnion(last.spanBefore, change.spanBefore) ?? undefined,
+      blank: last.blank === change.blank ? last.blank : undefined,
+      joined: (last.joined ?? 1) + 1,
+      order: Math.min(last.order, changes.indexOf(change)),
+    });
+  }
+  // In the order the comparison gave them, largest first
+  return [...rest.map((change) => ({ ...change, order: changes.indexOf(change) })), ...joined]
+    .sort((a, b) => a.order - b.order)
+    .map(({ order, ...change }) => change);
+}
+
+/**
  * The scenes of the video, in route order. A change that is the same on several pages, such
  * as a new link in the header, is one scene that says on how many pages it is, and it is
- * always shown. Of the changes only one page has, each route gives its `perRoute` largest.
+ * always shown. Changes close to each other on one page, such as the rows of a table whose
+ * cells moved on, are one scene: shown apart, each row would say little. Of the changes only
+ * one page has, each route first gives its `perRoute` largest; places left over in the
+ * video go to the next largest, so a site of one page still shows all its changes.
  */
 export function toScenes(pages, { perRoute, maxScenes }) {
   const groups = new Map();
   for (const page of pages) {
-    for (const change of page.changes) {
-      const key = change.page
+    for (const change of joinNear(page.changes)) {
+      let key = change.page
         ? `page ${page.route}`
         : // Without the position down the page: a changed footer sits at another height on every page
           JSON.stringify([
@@ -244,10 +299,13 @@ export function toScenes(pages, { perRoute, maxScenes }) {
             change.box ? [change.box.x, change.box.width, change.box.height] : [change.beforeY, change.afterY],
           ]);
       const group = groups.get(key);
-      if (group) {
+      // The same change on another page joins its scene; twice on one page it is two
+      if (group && !group.seen.has(page.route)) {
         group.routes += 1;
+        group.seen.add(page.route);
         continue;
       }
+      if (group) key = `${key} ${page.route} ${change.afterY}`;
       const { view, ...rest } = change;
       groups.set(key, {
         route: page.route,
@@ -257,21 +315,29 @@ export function toScenes(pages, { perRoute, maxScenes }) {
         pageWidth: view.width,
         beforeHeight: view.beforeHeight,
         afterHeight: view.afterHeight,
+        seen: new Set([page.route]),
         ...rest,
       });
     }
   }
   const taken = new Map();
   const scenes = [];
+  const later = [];
   for (const scene of groups.values()) {
     if (scene.routes === 1) {
       const count = taken.get(scene.route) ?? 0;
-      if (count >= perRoute) continue;
+      if (count >= perRoute) {
+        later.push(scene);
+        continue;
+      }
       taken.set(scene.route, count + 1);
     }
     scenes.push(scene);
   }
-  return scenes.slice(0, maxScenes);
+  // What is left of the room in the video: the changes held back, in their order
+  const all = [...scenes, ...later.slice(0, Math.max(0, maxScenes - scenes.length))];
+  const chosen = new Set(all.slice(0, maxScenes));
+  return [...groups.values()].filter((scene) => chosen.has(scene)).map(({ seen, ...scene }) => scene);
 }
 
 /**
