@@ -48,9 +48,12 @@ jobs:
           base: HEAD~1
           serve: node serve.mjs site {port}
           title: Chairworks
-          # No key here: every scene gets the sentence that needs no model, and the voice
-          # installed on the runner has to speak it
+          # In a pull request Claude writes the sentences, so the comment shows what the
+          # action does. Elsewhere, and where the secret is not given (a fork, Dependabot),
+          # every scene gets the sentence that needs no model; the voice installed on the
+          # runner speaks it either way.
           narrate: claude-opus-5-5
+          anthropic-api-key: ${{ github.event_name == 'pull_request' && secrets.ANTHROPIC_API_KEY || '' }}
           voice: en_US-lessac-medium
         env:
           CHANGEREEL_CWD: ${{ runner.temp }}/shop
