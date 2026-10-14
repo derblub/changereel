@@ -72,7 +72,7 @@ What you know to be random, name with `--ignore`. On the site this was tried on,
 
 ## In a pull request
 
-The action builds and serves the base of the pull request and its head, compares them and renders the video. The pull request gets a comment with what changed on which page and the way to the video; a later run changes that comment instead of adding one. A pull request that changes no page gets no comment.
+The action builds and serves the base of the pull request and its head, compares them and renders the video. The pull request gets a comment with a moving preview of the video, what changed on which page, and a link to the video itself; a later run changes that comment instead of adding one. GitHub shows no video in a comment, so the preview is a small animated picture, kept on a branch of its own (`changereel-previews`); in a private repository the comment has the link only. A pull request that changes no page gets no comment.
 
 ```yaml
 name: What changed
@@ -82,7 +82,7 @@ jobs:
   changereel:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write # for the preview on its branch
       pull-requests: write # for the comment
     steps:
       - uses: actions/checkout@v7
@@ -114,6 +114,7 @@ jobs:
 | `language` | `en` | Language of the sentences and of the words in the video: `en` or `de`. |
 | `upload` | `true` | Keep the video as an artifact of the run. |
 | `artifact-name` | `changereel` | Name of that artifact; each use of the action in one run needs its own. |
+| `preview` | `true` | A moving preview in the comment, kept on the branch `changereel-previews`. |
 | `comment` | `true` | Comment on the pull request. |
 | `github-token` | `github.token` | Token for the comment. |
 

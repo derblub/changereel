@@ -65,6 +65,8 @@ export function parseArgs(argv) {
     maxScenes: number("max-scenes", 8),
     perRoute: number("per-route", 2),
     video: !argv.includes("--no-video"),
+    // A small animated picture of the video as well, for where a video cannot be shown
+    preview: argv.includes("--preview"),
     // A sentence per scene from a model (local, or claude-… at Anthropic), spoken when there is a voice
     narrate: argv.includes("--narrate"),
     model: opt("model") || "gemma3:4b",
@@ -284,7 +286,7 @@ export function compileOwn(config) {
   return { ...config, module: { ...config.module, rules } };
 }
 
-async function render(props, out) {
+async function render(props, out, { preview = false } = {}) {
   const { bundle } = await import("@remotion/bundler");
   const { renderMedia, selectComposition } = await import("@remotion/renderer");
   const fonts = join(HERE, "..", "video", "fonts");
@@ -295,7 +297,11 @@ async function render(props, out) {
   const composition = await selectComposition({ serveUrl, id: "Reel", inputProps: props, browserExecutable });
   const outputLocation = join(out, "changereel.mp4");
   await renderMedia({ composition, serveUrl, codec: "h264", outputLocation, inputProps: props, browserExecutable });
-  return outputLocation;
+  if (!preview) return { video: outputLocation };
+  // Every fifth frame at two fifths of the size: about 3 MB for a minute
+  const previewLocation = join(out, "changereel.gif");
+  await renderMedia({ composition, serveUrl, codec: "gif", everyNthFrame: 5, scale: 0.4, outputLocation: previewLocation, inputProps: props, browserExecutable });
+  return { video: outputLocation, preview: previewLocation };
 }
 
 /** The changes as Markdown, for a job summary or a comment. */
@@ -378,6 +384,7 @@ async function main() {
   );
   console.log(`\n${total} change${total === 1 ? "" : "s"} on ${changed.length} of ${pages.length} routes`);
   let video = "";
+  let preview = "";
   if (total && options.video) {
     const scenes = toScenes(changed, options);
     if (options.narrate) {
@@ -401,12 +408,13 @@ async function main() {
     };
     writeFileSync(join(options.out, "reel.json"), JSON.stringify(props, null, 2) + "\n");
     console.log(`Rendering ${scenes.length} scene${scenes.length === 1 ? "" : "s"} …`);
-    video = await render(props, options.out);
+    ({ video, preview = "" } = await render(props, options.out, { preview: options.preview }));
     console.log(video);
+    if (preview) console.log(preview);
   }
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, renderMarkdown(pages, pages.length));
   if (process.env.GITHUB_OUTPUT) {
-    appendFileSync(process.env.GITHUB_OUTPUT, `changes=${total}\npages=${changed.length}\nvideo=${video}\nreport=${join(options.out, "changes.json")}\n`);
+    appendFileSync(process.env.GITHUB_OUTPUT, `changes=${total}\npages=${changed.length}\nvideo=${video}\npreview=${preview}\nreport=${join(options.out, "changes.json")}\n`);
   }
 }
 

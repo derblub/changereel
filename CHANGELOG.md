@@ -5,7 +5,8 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 - The action comments on the pull request: what changed on which page, the sentence for each change when there is one, and the way to the video. A later run changes the comment instead of adding one; a pull request that changes no page gets none.
-- The action keeps the video as an artifact of the run itself (inputs `upload`, `artifact-name`; output `video-url`).
+- The action keeps the video as an artifact of the run itself, as the video and not in a zip (inputs `upload`, `artifact-name`; output `video-url`).
+- The comment shows a moving preview of the video, kept on the branch `changereel-previews` (input `preview`; `--preview` renders it as `changereel.gif`).
 
 ## [0.5.2] - 2026-10-14
 

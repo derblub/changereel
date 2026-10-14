@@ -57,6 +57,9 @@ inputs:
   artifact-name:
     description: "Name of that artifact. Each use of the action in one run needs its own."
     default: changereel
+  preview:
+    description: "'false' leaves the moving picture out of the comment. Otherwise it is kept on the branch 'changereel-previews' and shown in the comment; that needs 'contents: write' and a public repository."
+    default: "true"
   comment:
     description: "'false' writes no comment. Otherwise a pull request gets one, with the changes and the way to the video, and later runs change it. The job needs 'pull-requests: write'."
     default: "true"
@@ -117,6 +120,8 @@ runs:
         IN_NARRATE: ${{ inputs.narrate }}
         IN_VOICE: ${{ inputs.voice }}
         IN_LANGUAGE: ${{ inputs.language }}
+        IN_PREVIEW: ${{ inputs.preview }}
+        IN_PR: ${{ github.event.pull_request.number }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         IN_SERVE: ${{ inputs.serve }}
         IN_BUILD: ${{ inputs.build }}
@@ -141,6 +146,7 @@ runs:
         if [ -n "$IN_ROUTES" ]; then args+=(--routes "$IN_ROUTES"); fi
         if [ -n "$IN_IGNORE" ]; then args+=(--ignore "$IN_IGNORE"); fi
         if [ "$IN_VIDEO" = false ]; then args+=(--no-video); fi
+        if [ "$IN_PREVIEW" != false ] && [ -n "$IN_PR" ]; then args+=(--preview); fi
         if [ -n "$IN_NARRATE" ]; then args+=(--narrate --model "$IN_NARRATE"); fi
         if [ -n "$IN_NARRATE" ] && [ -n "$IN_VOICE" ]; then
           args+=(--voice "$RUNNER_TEMP/changereel-voices/$IN_VOICE.onnx" --piper "$RUNNER_TEMP/changereel-piper/bin/piper")
@@ -152,6 +158,8 @@ runs:
       with:
         name: ${{ inputs.artifact-name }}
         path: ${{ steps.reel.outputs.video }}
+        # The video itself, not a zip with it
+        archive: false
     - name: Comment on the pull request
       if: inputs.comment != 'false' && github.event.pull_request.number
       shell: bash
@@ -159,5 +167,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         CHANGEREEL_PR: ${{ github.event.pull_request.number }}
         CHANGEREEL_VIDEO_URL: ${{ steps.upload.outputs.artifact-url }}
+        CHANGEREEL_PREVIEW: ${{ inputs.preview }}
+        CHANGEREEL_SHA: ${{ github.event.pull_request.head.sha }}
         IN_REPORT: ${{ steps.reel.outputs.report }}
       run: node "$GITHUB_ACTION_PATH/src/comment.mjs" "$(dirname "$IN_REPORT")"

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { MARKER, commentBody, postComment } from "../src/comment.mjs";
+import { BRANCH, MARKER, commentBody, postComment, putPreview } from "../src/comment.mjs";
 
 const pages = [
   { route: "/", changes: [{ type: "added" }, { type: "changed" }] },
@@ -64,5 +64,29 @@ describe("comment", () => {
     assert.equal(sent[1].url, "https://api.github.com/repos/o/r/issues/7/comments");
     const again = github([{ id: 42, body: `${MARKER}\nold` }]);
     assert.equal(await postComment({ token: "t", repo: "o/r", number: 7, body: "none now", quiet: true, fetch: again.fetch }), "updated");
+  });
+
+  test("the moving picture comes first and leads to the video", () => {
+    const body = commentBody({ pages, checked: 3, videoUrl: "https://example.test/video", previewUrl: "https://example.test/p.gif" });
+    assert.match(body, /\[!\[What changed\]\(https:\/\/example\.test\/p\.gif\)\]\(https:\/\/example\.test\/video\)/);
+    assert.ok(body.indexOf("p.gif") < body.indexOf("| Page"));
+  });
+
+  test("the preview goes on a branch of its own, made when it is not there", async () => {
+    const calls = [];
+    const fetch = async (url, init = {}) => {
+      const method = init.method || "GET";
+      calls.push(`${method} ${url.replace("https://api.github.com/repos/o/r", "")}`);
+      if (url.endsWith(`/git/ref/heads/${BRANCH}`)) return { ok: false, status: 404, json: async () => ({}) };
+      return { ok: true, json: async () => ({ private: false, sha: `sha${calls.length}` }) };
+    };
+    const url = await putPreview({ token: "t", repo: "o/r", path: "pr-7/abc.gif", content: Buffer.from("GIF"), fetch });
+    assert.equal(url, `https://raw.githubusercontent.com/o/r/${BRANCH}/pr-7/abc.gif`);
+    assert.deepEqual(calls, ["GET ", `GET /git/ref/heads/${BRANCH}`, "POST /git/blobs", "POST /git/trees", "POST /git/commits", "POST /git/refs"]);
+  });
+
+  test("a private repository gets no preview", async () => {
+    const fetch = async () => ({ ok: true, json: async () => ({ private: true }) });
+    assert.equal(await putPreview({ token: "t", repo: "o/r", path: "x.gif", content: Buffer.from("GIF"), fetch }), null);
   });
 });

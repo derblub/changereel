@@ -27,9 +27,9 @@ jobs:
   # changes they were written to have and render the video.
   action:
     runs-on: ubuntu-latest
-    # In a pull request the action writes its comment
+    # In a pull request the action writes its comment and keeps the preview on its branch
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
