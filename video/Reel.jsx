@@ -264,7 +264,7 @@ const Scene = ({ scene, index, count, texts, previous }) => {
                 ...mark,
                 borderRadius: 6 / zoom,
                 opacity: shown,
-                boxShadow: "0 0 0 4000px rgba(0,0,0,0.26)",
+                boxShadow: "0 0 0 4000px rgba(0,0,0,0.18)",
               }}
             >
               {[
@@ -286,8 +286,9 @@ const Scene = ({ scene, index, count, texts, previous }) => {
           <span
             style={{
               position: "absolute",
+              // Below on the left: the top of a page holds its logo and its navigation
               left: 20,
-              top: 20,
+              bottom: 20,
               padding: "8px 16px 8px 18px",
               borderRadius: 8,
               ...label,

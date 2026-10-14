@@ -57,6 +57,9 @@ export function parseArgs(argv) {
     ignore: (opt("ignore") || "").split(",").map((selector) => selector.trim()).filter(Boolean),
     out: resolve(opt("out") || "out"),
     title: opt("title") || "What changed",
+    // Names for the two versions on the opening card, instead of a commit or an address
+    beforeLabel: opt("before-label"),
+    afterLabel: opt("after-label"),
     width: number("width", 1280),
     wait: number("wait", 500),
     passes: Math.max(1, number("passes", 2)),
@@ -470,8 +473,8 @@ async function main() {
       facts: [
         [texts.changes, String(total)],
         [texts.pages, texts.of(changed.length, pages.length)],
-        [texts.before, short(options.base ?? options.before)],
-        [texts.after, short(options.base ? options.head : options.after)],
+        [texts.before, options.beforeLabel || short(options.base ?? options.before)],
+        [texts.after, options.afterLabel || short(options.base ? options.head : options.after)],
       ],
       scenes,
     };

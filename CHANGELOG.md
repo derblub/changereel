@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- `--before-label` and `--after-label` name the two versions on the opening card.
+- The sign that says which side is shown sits at the bottom left of the recording, where it covers no logo, and the page around a change is dimmed less.
+- A new demo: a sample coffee roastery in `docs/demo`, narrated.
+
 ## [0.7.1] - 2026-10-14
 
 - Changes close together on one page are one scene, framed around all of them. The rows of a table whose cells moved on were each a scene of their own, and a model shown one row told something false.

@@ -32,10 +32,10 @@
 ---
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="A video made by changereel: for each of five changes the page scrolls to the place, the camera moves closer, the page changes from before to after while a mark moves from the old place to the new one, and a sentence says what changed" width="820">
+  <img src="docs/assets/demo.gif" alt="A video made by changereel for a sample coffee roastery: for each of five changes the page scrolls to the place, the camera moves closer, the page changes from before to after while a mark moves from the old place to the new one, and a sentence says what changed" width="820">
 </p>
 
-<p align="center"><sub>The two sample sites of the tests, compared. <a href="https://github.com/derblub/changereel/releases/download/v0.7.1/changereel-demo.mp4">The same video with its voice</a>.</sub></p>
+<p align="center"><sub>Two versions of a sample site, compared (<a href="docs/demo">docs/demo</a>). <a href="https://github.com/derblub/changereel/releases/download/v0.7.1/changereel-demo.mp4">The same video with its voice</a>.</sub></p>
 
 A pull request says what changed in the code. What changed on the screen, the reviewer has to find by clicking through a preview. **changereel** opens every page of the site before and after the change, works out where the two differ and renders a short video that looks like a screen recording: the page scrolls to the place, the camera moves closer, the page changes from before to after, and a frame is drawn around what is different.
 
@@ -188,6 +188,7 @@ changereel --before https://example.com --after http://localhost:3000
 | `--ignore` | | CSS selectors, separated by commas, of parts to leave out of the comparison: a random testimonial, an animated logo. They stay in the video. |
 | `--out` | `out` | Directory for the screenshots, `changes.json` and `changereel.mp4`. |
 | `--title` | `What changed` | Title on the first card. |
+| `--before-label`, `--after-label` | | Names for the two versions on the first card, such as a branch. Default: the commit or the host. |
 | `--width` | `1280` | Width of the browser window. |
 | `--wait` | `500` | Milliseconds to wait after a page has loaded, before it is watched until it has settled. |
 | `--passes` | `2` | How often each page is captured. More visits find more of what is not stable. |
@@ -251,6 +252,7 @@ The model sees little more than the changed pixels, and is told when the spot wa
 npm install
 npm test
 node test/run-demo.mjs        # compares the two sample sites in test/site and renders out/changereel.mp4
+node docs/demo/render.mjs     # the demo of this README, narrated (needs ANTHROPIC_API_KEY and --voice)
 ```
 
 ## Contributing

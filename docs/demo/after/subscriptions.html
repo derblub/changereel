@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Lumen Coffee · Subscriptions</title>
+<style>
+  :root { --cream: #faf6ef; --paper: #fffdf9; --ink: #2a1f1a; --soft: #6b5a50; --line: #eadfd2; --accent: #c2410c; --sage: #5f7a4e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 17px/1.6 "DM Sans", system-ui, sans-serif; color: var(--ink); background: var(--cream); }
+  a { color: inherit; }
+  header { display: flex; align-items: center; gap: 36px; padding: 22px 72px; background: var(--paper); border-bottom: 1px solid var(--line); }
+  header .logo { font: 26px/1 "DM Serif Display", Georgia, serif; margin-right: auto; text-decoration: none; }
+  header nav { display: flex; gap: 30px; } header nav a { text-decoration: none; color: var(--soft); font-weight: 500; }
+  header .bag { padding: 9px 18px; border-radius: 999px; background: var(--ink); color: var(--cream); text-decoration: none; font-weight: 600; font-size: 15px; }
+  .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 56px; align-items: center; max-width: 1136px; margin: 0 auto; padding: 72px 72px 64px; }
+  h1 { font: 58px/1.05 "DM Serif Display", Georgia, serif; margin: 0 0 20px; letter-spacing: -0.01em; }
+  .lead { font-size: 20px; color: var(--soft); margin: 0 0 30px; max-width: 30em; }
+  .cta { display: inline-block; padding: 15px 28px; border-radius: 999px; background: var(--accent); color: #fff; text-decoration: none; font-weight: 600; }
+  .art { aspect-ratio: 1; border-radius: 28px; background: radial-gradient(circle at 30% 30%, #f3c98b, transparent 55%), radial-gradient(circle at 70% 75%, #b45a2c, transparent 60%), #7a3b1e; position: relative; overflow: hidden; }
+  .art::after { content: ""; position: absolute; inset: 22% 26%; border-radius: 50% 50% 46% 46%; background: #3b1d10; box-shadow: inset 18px 0 0 -8px #2a140b; transform: rotate(-24deg); }
+  section { max-width: 1136px; margin: 0 auto; padding: 24px 72px 56px; }
+  h2 { font: 36px/1.15 "DM Serif Display", Georgia, serif; margin: 0 0 28px; }
+  .beans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .bean { background: var(--paper); border: 1px solid var(--line); border-radius: 22px; padding: 22px; }
+  .pack { height: 150px; border-radius: 14px; margin-bottom: 18px; display: flex; align-items: flex-end; padding: 14px; color: #fff; font: 22px/1 "DM Serif Display", Georgia, serif; }
+  .bean h3 { margin: 0 0 4px; font-size: 19px; } .bean p { margin: 0; color: var(--soft); font-size: 15px; }
+  .bean .price { margin-top: 12px; font-weight: 700; }
+  .tag { display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 999px; background: var(--sage); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; vertical-align: 3px; }
+  .quote { margin: 8px auto 0; max-width: 1136px; padding: 0 72px 72px; }
+  .quote blockquote { margin: 0; padding: 36px 44px; border-radius: 26px; background: var(--ink); color: var(--cream); font: 28px/1.35 "DM Serif Display", Georgia, serif; }
+  .quote cite { display: block; margin-top: 16px; font: 15px/1.4 "DM Sans", sans-serif; font-style: normal; color: #cbb8a8; }
+  .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .plan { background: var(--paper); border: 1px solid var(--line); border-radius: 22px; padding: 30px; }
+  .plan.best { border: 2px solid var(--accent); }
+  .plan h3 { margin: 0 0 6px; font: 26px/1.1 "DM Serif Display", Georgia, serif; }
+  .plan .amount { font: 46px/1 "DM Serif Display", Georgia, serif; margin: 18px 0 4px; }
+  .plan ul { padding-left: 20px; color: var(--soft); margin: 18px 0 0; }
+  footer { padding: 36px 72px; color: var(--soft); border-top: 1px solid var(--line); background: var(--paper); font-size: 15px; }
+</style></head>
+<body>
+<header><a class="logo" href="/">Lumen Coffee</a><nav><a href="/">Shop</a><a href="/subscriptions.html">Subscriptions</a><a href="/about.html">Our roastery</a></nav><a class="bag" href="#">Bag · 0</a></header>
+<section style="padding-top:72px"><h2>Coffee on a schedule</h2><p class="lead">Fresh beans every two or four weeks. Pause or stop whenever you like.</p><div class="plans">
+<div class="plan"><h3>Taster</h3><p>One bag a month</p><div class="amount">€16</div><ul><li>250 g of this week's pick</li><li>Free delivery in Austria</li></ul></div>
+<div class="plan best"><h3>Regular <span class="tag">MOST POPULAR</span></h3><p>Two bags a month</p><div class="amount">€29</div><ul><li>Two origins to compare</li><li>Free delivery in Austria</li><li>Tasting notes with every bag</li></ul></div>
+<div class="plan"><h3>Office</h3><p>Four bags a month</p><div class="amount">€54</div><ul><li>1 kg, ground or whole</li><li>Delivered to your office</li></ul></div>
+</div></section>
+<footer>Lumen Coffee · roasted in small batches in Vienna · hello@lumen.example</footer>
+</body></html>
