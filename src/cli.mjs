@@ -67,6 +67,8 @@ export function parseArgs(argv) {
     video: !argv.includes("--no-video"),
     // A small animated picture of the video as well, for where a video cannot be shown
     preview: argv.includes("--preview"),
+    // In GitLab CI for a merge request: a comment there with the video
+    comment: argv.includes("--comment"),
     // A sentence per scene from a model (local, or claude-… at Anthropic), spoken when there is a voice
     narrate: argv.includes("--narrate"),
     model: opt("model") || "gemma3:4b",
@@ -343,6 +345,7 @@ Main options:
   --no-video               only compare
   --narrate --voice x.onnx a sentence per change, spoken
   --language de            German sentences and words in the video
+  --comment                in GitLab CI: a comment on the merge request, with the video
 
 All options: https://github.com/derblub/changereel#on-the-command-line`;
 
@@ -411,6 +414,15 @@ async function main() {
     ({ video, preview = "" } = await render(props, options.out, { preview: options.preview }));
     console.log(video);
     if (preview) console.log(preview);
+  }
+  if (options.comment) {
+    const { commentOnGitLab, inMergeRequest } = await import("./gitlab.mjs");
+    if (inMergeRequest()) {
+      const reel = video ? JSON.parse(readFileSync(join(options.out, "reel.json"), "utf8")) : {};
+      await commentOnGitLab({ pages: changed, checked: pages.length, scenes: reel.scenes, video });
+    } else {
+      console.log("--comment works in a GitLab CI job for a merge request; on GitHub the action comments.");
+    }
   }
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, renderMarkdown(pages, pages.length));
   if (process.env.GITHUB_OUTPUT) {

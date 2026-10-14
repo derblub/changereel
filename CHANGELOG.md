@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- GitLab: in a CI job for a merge request, `--comment` writes a comment on it with the video itself, which GitLab plays, and what changed on which page. A later run changes the comment. Needs a project access token in `CHANGEREEL_GITLAB_TOKEN`.
+
 ## [0.6.2] - 2026-10-14
 
 - When the last preview goes, the branch `changereel-previews` goes with it; GitHub does not keep an empty branch, and the cleanup failed there.

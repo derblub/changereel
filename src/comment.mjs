@@ -25,12 +25,14 @@ const cell = (text) => String(text).replace(/\|/g, "\\|").replace(/\n/g, " ");
  * The text of the comment. `scenes` are those of the video, with their sentences; changes
  * that are not in the video (more than it holds) are counted at the end.
  */
-export function commentBody({ pages, checked, scenes = [], videoUrl, previewUrl, runUrl }) {
+export function commentBody({ pages, checked, scenes = [], videoUrl, previewUrl, embed, runUrl }) {
   const changed = pages.filter((page) => page.changes.length);
   const total = changed.reduce((sum, page) => sum + page.changes.length, 0);
   const lines = [MARKER, `### ${total ? `${total} visible change${total === 1 ? "" : "s"} on ${changed.length} of ${checked} pages` : `No visible change on ${checked} pages`}`, ""];
-  // The picture first: it moves, and it leads to the video
-  if (total && previewUrl) lines.push(videoUrl ? `[![What changed](${previewUrl})](${videoUrl})` : `![What changed](${previewUrl})`, "");
+  // The video first where the comment can hold it (GitLab plays an uploaded one); else the
+  // picture that moves and leads to it
+  if (total && embed) lines.push(embed, "");
+  else if (total && previewUrl) lines.push(videoUrl ? `[![What changed](${previewUrl})](${videoUrl})` : `![What changed](${previewUrl})`, "");
   if (!total) {
     lines.push("Every page looks as it did before.");
   } else if (scenes.length) {

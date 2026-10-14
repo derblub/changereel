@@ -21,6 +21,7 @@
   <a href="#how-it-finds-a-change">How it works</a> ·
   <a href="#what-it-leaves-out-so-that-a-change-is-a-change">What it leaves out</a> ·
   <a href="#in-a-pull-request">GitHub Action</a> ·
+  <a href="#in-a-merge-request-on-gitlab">GitLab</a> ·
   <a href="#on-the-command-line">Command line</a> ·
   <a href="#with-a-voice">Voice</a> ·
   <a href="CHANGELOG.md">Changelog</a>
@@ -129,6 +130,29 @@ jobs:
 | `video-url` | Address of the artifact with the video. |
 
 Each version is built in its own git worktree, so two installs and two builds run in the job. The first render downloads the browser Remotion renders with, about 100 MB.
+
+## In a merge request on GitLab
+
+In GitLab CI the command line does the same, and `--comment` writes the comment on the merge request. GitLab plays a video in a comment, so the comment holds the video itself, with its sound, and no preview is needed; that works in a private project as well.
+
+```yaml
+changereel:
+  stage: test
+  image: node:24-bookworm
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: 0 # the base commit has to be there
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends chromium
+  script:
+    - npx changereel --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --build "npm ci && npm run build" --serve "npm run preview -- --port {port}" --comment
+  artifacts:
+    paths: [out/]
+    expire_in: 2 weeks
+```
+
+The comment needs a token that may write one: a project access token with the scope `api` and at least the role Reporter, as the CI/CD variable `CHANGEREEL_GITLAB_TOKEN` (masked). The token of the job itself may not comment. Without the variable the job still compares and keeps the video as an artifact.
 
 ## On the command line
 
