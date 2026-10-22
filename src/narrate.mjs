@@ -17,14 +17,23 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
+import { describeStep } from "./states.mjs";
 import { textsFor } from "./texts.mjs";
 
 /** The sentence that needs no model. */
 export function plain(scene, language = "en") {
   const { plain: words } = textsFor(language);
-  // A state reached on one side only reads, until it has words of its own, as a page added or removed
-  if (scene.page) return words.page[scene.type === "reached" ? "added" : scene.type === "unreached" ? "removed" : scene.type](scene.route);
-  const where = scene.routes > 1 ? words.onPages(scene.routes) : scene.route === "/" ? words.onHome : words.on(scene.route);
+  if (scene.setup) return words.login[scene.type];
+  if (scene.type === "unreached" || scene.type === "reached") return words.state[scene.type](scene.state, scene.route);
+  if (scene.page) return words.page[scene.type](scene.route);
+  const where =
+    scene.routes > 1
+      ? words.onPages(scene.routes)
+      : scene.state
+        ? words.inState(scene.state, scene.route)
+        : scene.route === "/"
+          ? words.onHome
+          : words.on(scene.route);
   return words.sentence(scene.type, where);
 }
 
@@ -146,13 +155,34 @@ function ask(scene, sides, empty) {
 }
 
 /**
+ * The steps of a state as the model is told them: what each does, without what a `fill`
+ * types. A value of the file can be a name or an address, and one from the environment is a
+ * secret; neither helps to say what changed.
+ */
+export function stepsWithoutValues(steps) {
+  return steps.map((step) => {
+    const text = describeStep(step);
+    if (step.action !== "fill") return text;
+    const value = step.valueFrom ? ` from $${step.valueFrom.env}` : ` with ${JSON.stringify(step.value)}`;
+    return text.slice(0, -value.length);
+  });
+}
+
+/** What the model is told about a state before it is asked: its name, its page, and the way there. */
+export function stateContext(scene, steps = []) {
+  if (!scene.state) return "";
+  const way = steps.length ? `, reached from that page with these steps: ${stepsWithoutValues(steps).join("; ")}` : "";
+  return `The pictures show "${scene.state}", a state of the page ${scene.route}${way}. `;
+}
+
+/**
  * What the model is asked, for the pictures a scene has. `empty` names the side on which the
  * changed spot is blank: then the model is told so, because it is bad at seeing it. In
  * another language than English the answer cannot be told how to begin or end in English
  * words; it is told what to say instead.
  */
-export function question(scene, sides, empty, language = "en") {
-  const text = ask(scene, sides, empty);
+export function question(scene, sides, empty, language = "en", steps = []) {
+  const text = stateContext(scene, steps) + ask(scene, sides, empty);
   if (textsFor(language) === textsFor("en")) return text;
   return (
     text
@@ -263,7 +293,9 @@ export async function describe(scene, out, options) {
   }
   if (!images.length) throw new Error("nothing to show the model");
   const send = isHosted(options.model) ? askClaude : askOllama;
-  const text = tidy(await send(question(scene, sides, empty, options.language), images, options));
+  // A state is shown with its name and the way to it: a dialog alone does not say what it is for
+  const steps = options.states?.states.find((state) => state.name === scene.state)?.steps ?? [];
+  const text = tidy(await send(question(scene, sides, empty, options.language, steps), images, options));
   if (!text) throw new Error("the model gave no sentence");
   return text;
 }
@@ -380,7 +412,8 @@ export async function narrate(scenes, out, options, log = console.log) {
   let asked = true;
   for (const [index, scene] of scenes.entries()) {
     scene.text = plain(scene, options.language);
-    if (asked) {
+    // Where steps stopped the comparison knows exactly what happened: a model would only guess
+    if (asked && !scene.stopped) {
       try {
         scene.text = await describe(scene, out, options);
         // A sentence of a model, not the one made without it

@@ -28,7 +28,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { textsFor } from "../src/texts.mjs";
+import { kindOf, stopLine, textsFor } from "../src/texts.mjs";
 import {
   END,
   FPS,
@@ -66,7 +66,7 @@ function useFonts() {
   const [handle] = useState(() => delayRender("fonts"));
   useEffect(() => {
     const faces = [
-      ["fonts/google-sans-flex-latin-wght-normal.woff2", "U+0000-00FF, U+2013-2014, U+2190-2199"],
+      ["fonts/google-sans-flex-latin-wght-normal.woff2", "U+0000-00FF, U+2013-2014, U+2018-201E, U+2039-203A, U+2190-2199"],
       ["fonts/google-sans-flex-latin-ext-wght-normal.woff2", "U+0100-024F, U+1E00-1EFF"],
     ].map(
       ([file, unicodeRange]) =>
@@ -353,8 +353,10 @@ const Scene = ({ scene, index, count, texts, previous }) => {
   const page = (which, at) => (
     <Img src={staticFile(scene[which])} style={{ position: "absolute", left: 0, top: -at * scale, width: WINDOW_W }} />
   );
-  const kind = scene.page ? texts.page(texts.kind[scene.type]) : texts.kind[scene.type];
-  const size = scene.text && scene.text.length > 170 ? 28 : 32;
+  const kind = kindOf(scene, texts);
+  // Where the steps of a state or the login stopped: a line of its own under the recording
+  const stop = stopLine(scene, texts);
+  const size = scene.text && (scene.text.length > 170 || stop) ? 28 : 32;
   // The first scene brings the window in, the last takes it out; between them it stays
   const first = index === 0;
   const last = index === count - 1;
@@ -370,7 +372,10 @@ const Scene = ({ scene, index, count, texts, previous }) => {
         </span>
         <span style={{ width: 10, height: 10, borderRadius: 1, background: TEAL }} />
         <span style={{ ...label, color: WHITE }}>{kind}</span>
-        <span style={{ fontFamily: MONO, fontSize: 20, color: GRAY }}>{scene.route}</span>
+        <span style={{ fontFamily: MONO, fontSize: 20, color: GRAY }}>
+          {scene.route}
+          {scene.state && <span style={{ fontFamily: SANS, fontWeight: 400 }}> › {scene.state}</span>}
+        </span>
         {scene.routes > 1 && <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 300, color: GRAY }}>{texts.more(scene.routes - 1)}</span>}
       </div>
 
@@ -486,8 +491,8 @@ const Scene = ({ scene, index, count, texts, previous }) => {
         {side === "after" ? texts.after : texts.before}
       </span>
 
-      {/* The sentence, as the subtitle of the recording */}
-      {scene.text && (
+      {/* The sentence, as the subtitle of the recording, and above it where the steps stopped */}
+      {(scene.text || stop) && (
         <p
           style={{
             position: "absolute",
@@ -497,16 +502,26 @@ const Scene = ({ scene, index, count, texts, previous }) => {
             height: HEIGHT - WINDOW_Y - windowH - 28,
             margin: 0,
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
+            gap: 6,
             ...rise(frame, 10, 12),
           }}
         >
-          <span style={{ fontFamily: SANS, fontSize: size, lineHeight: `${size + 10}px`, fontWeight: 350, color: WHITE, textAlign: "center", textWrap: "balance", maxWidth: 1240 }}>
-            {scene.words?.length
-              ? scene.words.map((word, at) => <Word key={at} word={word} seconds={(frame - VOICE_FROM) / FPS} />)
-              : scene.text}
-          </span>
+          {stop && (
+            <span style={{ display: "flex", alignItems: "center", gap: 14, fontFamily: SANS, fontSize: 24, lineHeight: "32px", fontWeight: 400, color: GRAY, maxWidth: 1400 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 1, flex: "none", border: `2px solid ${GRAY}`, boxSizing: "border-box" }} />
+              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stop}</span>
+            </span>
+          )}
+          {scene.text && (
+            <span style={{ fontFamily: SANS, fontSize: size, lineHeight: `${size + 10}px`, fontWeight: 350, color: WHITE, textAlign: "center", textWrap: "balance", maxWidth: 1240 }}>
+              {scene.words?.length
+                ? scene.words.map((word, at) => <Word key={at} word={word} seconds={(frame - VOICE_FROM) / FPS} />)
+                : scene.text}
+            </span>
+          )}
         </p>
       )}
       {scene.audio && (
@@ -574,10 +589,11 @@ const End = ({ summary, texts, scenes }) => {
             <span style={{ ...label, width: 44, fontVariantNumeric: "tabular-nums" }}>{String(index + 1).padStart(2, "0")}</span>
             <span style={{ width: 10, height: 10, borderRadius: 1, background: TEAL, flex: "none", transform: "translateY(-2px)" }} />
             <span style={{ fontFamily: SANS, fontSize: 28, lineHeight: "36px", fontWeight: 500, color: WHITE, width: 300, flex: "none" }}>
-              {scene.page ? texts.page(texts.kind[scene.type]) : texts.kind[scene.type]}
+              {kindOf(scene, texts)}
             </span>
             <span style={{ fontFamily: MONO, fontSize: 22, color: GRAY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {scene.route}
+              {scene.state && <span style={{ fontFamily: SANS, fontWeight: 400 }}> › {scene.state}</span>}
               {scene.routes > 1 ? ` +${scene.routes - 1}` : ""}
             </span>
           </div>

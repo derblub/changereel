@@ -65,7 +65,7 @@ export async function postNote({ iid, body, quiet = false, ...options }) {
  * Comment on the merge request this job runs for. A comment that cannot be written is a
  * warning, not a failed run: the comparison is done and its files are there.
  */
-export async function commentOnGitLab({ pages, checked, scenes, video, env = process.env, log = console.log, fetch: request = fetch }) {
+export async function commentOnGitLab({ pages, checked, checkedStates, problems = [], scenes, video, env = process.env, log = console.log, fetch: request = fetch }) {
   const options = {
     api: env.CI_API_V4_URL,
     project: env.CI_PROJECT_ID,
@@ -77,9 +77,9 @@ export async function commentOnGitLab({ pages, checked, scenes, video, env = pro
     return "none";
   }
   try {
-    const quiet = !pages.some((page) => page.changes.length);
+    const quiet = !pages.some((page) => page.changes.length) && !problems.length;
     const embed = video && !quiet ? await upload({ ...options, file: video }) : undefined;
-    const body = commentBody({ pages, checked, scenes, embed, runUrl: env.CI_JOB_URL });
+    const body = commentBody({ pages, checked, checkedStates, problems, scenes, embed, runUrl: env.CI_JOB_URL });
     const done = await postNote({ ...options, iid: env.CI_MERGE_REQUEST_IID, body, quiet });
     log(`Comment ${done}`);
     return done;

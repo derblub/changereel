@@ -20,28 +20,85 @@ export const MARKER = "<!-- changereel -->";
 
 const KIND = { added: "Added", removed: "Removed", changed: "Changed" };
 const cell = (text) => String(text).replace(/\|/g, "\\|").replace(/\n/g, " ");
+// Words that come from the states file: no tag of theirs is read as one
+const words = (text) => cell(text).replace(/</g, "&lt;");
+// A step as the file names it, with the quotes a person writes
+const quoted = (text) => String(text).replace(/"([^"]*)"/g, "“$1”");
+
+/** A page as the Page column names it, and a state with its route: `/cart` › Checkout dialog */
+export const pageCell = (route, state) => `\`${cell(route)}\`${state ? ` › ${words(state)}` : ""}`;
+
+/** Where the steps of a state stopped, from 1: "step 1: click button “Checkout”, not found" */
+const stopCell = (stop) => (stop.step === null ? "the page is not there" : words(`step ${stop.step + 1}: ${quoted(stop.does)}, ${stop.reason}`));
+
+/** The Change column, the same in the comment and the summary of the job. */
+export function changeCell(change) {
+  if (change.type === "unreached") return `Can no longer be reached (${stopCell(change.stopped)})`;
+  if (change.type === "reached") return "Can be reached now";
+  return KIND[change.type] ?? cell(change.type);
+}
+
+/**
+ * How many of what was compared look different. States count apart from pages, "2 of 12
+ * pages and 1 of 2 states"; without states it reads as it always did.
+ */
+export function counted(changed, checked, states = 0) {
+  if (!states) return `${changed.length} of ${checked} pages`;
+  const onStates = changed.filter((page) => page.state).length;
+  return `${changed.length - onStates} of ${checked - states} pages and ${onStates} of ${states} state${states === 1 ? "" : "s"}`;
+}
+
+/** The finding of a login that gets through on one side only: the heading and the one line in place of a table. */
+export function setupLines(page) {
+  const { stopped } = page.changes[0];
+  const other = stopped.side === "after" ? "before" : "after";
+  return [
+    stopped.side === "after" ? "The login no longer gets through" : "The login gets through only now",
+    `The login stopped on the version ${stopped.side}, at step ${stopped.step + 1}: ${words(quoted(stopped.does))}, ${words(stopped.reason)}. ` +
+      `It gets through on the version ${other}. Nothing else was compared: every page would differ only by the login.`,
+  ];
+}
+
+/** The states that could not be compared, with what each side said: a list under the table. */
+export function notCompared(problems = []) {
+  if (!problems.length) return [];
+  const side = (which, text) => text && `${which}: ${words(quoted(text))}`;
+  return [
+    "**Not compared**",
+    "",
+    ...problems.map(({ name, route, before, after }) => `- ${pageCell(route, name)}: ${[side("before", before), side("after", after)].filter(Boolean).join("; ")}`),
+  ];
+}
 
 /**
  * The text of the comment. `scenes` are those of the video, with their sentences; changes
- * that are not in the video (more than it holds) are counted at the end.
+ * that are not in the video (more than it holds) are counted at the end. `checkedStates` of
+ * the `checked` are states, and `problems` the states that could not be compared.
  */
-export function commentBody({ pages, checked, scenes = [], videoUrl, previewUrl, embed, runUrl }) {
+export function commentBody({ pages, checked, checkedStates = 0, problems = [], scenes = [], videoUrl, previewUrl, embed, runUrl }) {
   const changed = pages.filter((page) => page.changes.length);
   const total = changed.reduce((sum, page) => sum + page.changes.length, 0);
-  const lines = [MARKER, `### ${total ? `${total} visible change${total === 1 ? "" : "s"} on ${changed.length} of ${checked} pages` : `No visible change on ${checked} pages`}`, ""];
+  const setup = changed.find((page) => page.setup);
+  const where = counted(changed, checked, checkedStates);
+  const nothing = checkedStates ? `${checked - checkedStates} pages and ${checkedStates} state${checkedStates === 1 ? "" : "s"}` : `${checked} pages`;
+  const title = setup ? setupLines(setup)[0] : total ? `${total} visible change${total === 1 ? "" : "s"} on ${where}` : `No visible change on ${nothing}`;
+  const lines = [MARKER, `### ${title}`, ""];
   // The video first where the comment can hold it (GitLab plays an uploaded one); else the
   // picture that moves and leads to it
   if (total && embed) lines.push(embed, "");
   else if (total && previewUrl) lines.push(videoUrl ? `[![What changed](${previewUrl})](${videoUrl})` : `![What changed](${previewUrl})`, "");
-  if (!total) {
+  if (setup) {
+    // Every other page would differ only because one side is logged out: there is no table
+    lines.push(setupLines(setup)[1]);
+  } else if (!total) {
     lines.push("Every page looks as it did before.");
   } else if (scenes.length) {
     // Only sentences of a model say more than the columns; the plain one only repeats them
     const told = scenes.some((scene) => scene.told);
     lines.push(told ? "| | Page | What changed |" : "| | Page | Change |", "| --- | --- | --- |");
     scenes.forEach((scene, index) => {
-      const page = `\`${cell(scene.route)}\`${scene.routes > 1 ? ` and ${scene.routes - 1} more` : ""}`;
-      const what = told && scene.told ? cell(scene.text) : `${KIND[scene.type] ?? scene.type}${scene.page ? " page" : ""}`;
+      const page = `${pageCell(scene.route, scene.state)}${scene.routes > 1 ? ` and ${scene.routes - 1} more` : ""}`;
+      const what = told && scene.told ? cell(scene.text) : `${changeCell(scene)}${scene.page && KIND[scene.type] ? " page" : ""}`;
       lines.push(`| ${index + 1} | ${page} | ${what} |`);
     });
     // A scene can stand for several changes: on several pages, or close together on one
@@ -50,9 +107,10 @@ export function commentBody({ pages, checked, scenes = [], videoUrl, previewUrl,
   } else {
     lines.push("| Page | Change |", "| --- | --- |");
     for (const page of changed) {
-      for (const change of page.changes) lines.push(`| \`${cell(page.route)}\` | ${KIND[change.type] ?? change.type}${change.page ? " page" : ""} |`);
+      for (const change of page.changes) lines.push(`| ${pageCell(page.route, page.state?.name)} | ${changeCell(change)}${change.page && KIND[change.type] ? " page" : ""} |`);
     }
   }
+  if (problems.length) lines.push("", ...notCompared(problems));
   const spoken = scenes.some((scene) => scene.audio);
   if (videoUrl) lines.push("", `**[Watch the video](${videoUrl})**${spoken ? ", with its sound" : ""}`);
   if (changed.some((page) => page.unstable)) {
@@ -164,7 +222,7 @@ async function main() {
     return;
   }
   const out = process.argv[2];
-  const { checked, pages } = JSON.parse(readFileSync(join(out, "changes.json"), "utf8"));
+  const { checked, checkedStates, pages, problems = [] } = JSON.parse(readFileSync(join(out, "changes.json"), "utf8"));
   const reel = existsSync(join(out, "reel.json")) ? JSON.parse(readFileSync(join(out, "reel.json"), "utf8")) : {};
   const { CHANGEREEL_VIDEO_URL: videoUrl } = process.env;
   const runUrl =
@@ -181,8 +239,9 @@ async function main() {
       console.log(`::warning::No preview in the comment: ${err.message}. The job needs "contents: write" for it.`);
     }
   }
-  const body = commentBody({ pages, checked, scenes: reel.scenes, videoUrl, previewUrl, runUrl });
-  const quiet = !pages.some((page) => page.changes.length);
+  const body = commentBody({ pages, checked, checkedStates, problems, scenes: reel.scenes, videoUrl, previewUrl, runUrl });
+  // States that could not be compared fail the run: that is worth a word as well
+  const quiet = !pages.some((page) => page.changes.length) && !problems.length;
   try {
     console.log(`Comment ${await postComment({ token, repo, number, body, quiet })}`);
   } catch (err) {

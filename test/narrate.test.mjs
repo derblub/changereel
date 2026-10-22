@@ -62,6 +62,26 @@ describe("narrate", () => {
     assert.equal(question({}, { before: null, after: {} }, undefined, "xx"), question({}, { before: null, after: {} }));
   });
 
+  test("a state has plain sentences of its own, and the model is told its name and steps without values", () => {
+    const stopped = { side: "after", step: 0, does: 'click button "Checkout"', reason: "not found" };
+    assert.equal(plain({ type: "unreached", page: true, route: "/cart", state: "Checkout dialog", routes: 1, stopped }), "“Checkout dialog” on /cart can no longer be reached.");
+    assert.equal(plain({ type: "reached", page: true, route: "/new", state: "Export panel", routes: 1, stopped }, "de"), "„Export panel“ auf /new ist jetzt erreichbar.");
+    assert.equal(plain({ type: "changed", route: "/cart", state: "Checkout dialog", routes: 1 }), "A part of the page changed in “Checkout dialog” on /cart.");
+    assert.equal(plain({ type: "changed", route: "/cart", state: "Checkout dialog", routes: 1 }, "de"), "In „Checkout dialog“ auf /cart hat sich ein Teil der Seite geändert.");
+    assert.equal(plain({ type: "unreached", page: true, setup: true, route: "/login", routes: 1, stopped }), "The login no longer gets through, so nothing else was compared.");
+    assert.equal(plain({ type: "reached", page: true, setup: true, route: "/login", routes: 1, stopped }, "de"), "Die Anmeldung klappt erst jetzt, darum wurde sonst nichts verglichen.");
+    const steps = [
+      { action: "fill", target: { label: "Email" }, value: "ada@example.com" },
+      { action: "fill", target: { label: "Password" }, valueFrom: { env: "SECRET_PASSWORD" } },
+      { action: "click", target: { role: "button", name: "Checkout" } },
+      { action: "waitFor", target: { role: "dialog", name: "Checkout" } },
+    ];
+    const asked = question({ type: "changed", route: "/cart", state: "Checkout dialog" }, { before: {}, after: {} }, undefined, "en", steps);
+    assert.match(asked, /^The pictures show "Checkout dialog", a state of the page \/cart, reached from that page with these steps: fill label "Email"; fill label "Password"; click button "Checkout"; waitFor dialog "Checkout"\. These are two pictures/);
+    assert.doesNotMatch(asked, /ada@example|SECRET_PASSWORD/);
+    assert.doesNotMatch(question({ type: "changed", route: "/cart" }, { before: {}, after: {} }), /state/);
+  });
+
   test("the voice gets prices, units, badges and middle dots as they are said", () => {
     assert.equal(spoken('A "NEW" badge priced €18 · 250 g was added.'), 'A "New" badge priced 18 euros, 250 grams was added.');
     assert.equal(spoken("Plans priced €16 to €54, up 10% from $9.99."), "Plans priced 16 euros to 54 euros, up 10 percent from 9.99 dollars.");

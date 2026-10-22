@@ -17,6 +17,7 @@ import { appendFileSync, copyFileSync, mkdirSync, readFileSync, readdirSync, rea
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { openBrowser } from "./browser.mjs";
+import { changeCell, counted, notCompared, pageCell, setupLines } from "./comment.mjs";
 import { diffPages, nearNoise, noiseBoxes, paint } from "./diff.mjs";
 import { kokoroVoice, narrate } from "./narrate.mjs";
 import { collectRoutes, slug, toRoute } from "./routes.mjs";
@@ -531,13 +532,19 @@ export function joinNear(changes, gap = 96) {
  * cells moved on, are one scene: shown apart, each row would say little. Of the changes only
  * one page has, each route first gives its `perRoute` largest; places left over in the
  * video go to the next largest, so a site of one page still shows all its changes.
+ *
+ * A state counts as a page of its own for all of this: the new link in the header that shows
+ * on /cart and in its checkout dialog is one scene on two pages, and `perRoute` holds for
+ * the dialog apart from /cart. A login that stopped on one side comes first.
  */
 export function toScenes(pages, { perRoute, maxScenes }) {
   const groups = new Map();
-  for (const page of pages) {
+  const ordered = [...pages.filter((page) => page.setup), ...pages.filter((page) => !page.setup)];
+  for (const page of ordered) {
+    const id = pageId(page);
     for (const change of joinNear(page.changes)) {
       let key = change.page
-        ? `page ${page.route}`
+        ? `page ${id}`
         : // Without the position down the page: a changed footer sits at another height on every page
           JSON.stringify([
             change.layer,
@@ -548,22 +555,25 @@ export function toScenes(pages, { perRoute, maxScenes }) {
           ]);
       const group = groups.get(key);
       // The same change on another page joins its scene; twice on one page it is two
-      if (group && !group.seen.has(page.route)) {
+      if (group && !group.seen.has(id)) {
         group.routes += 1;
-        group.seen.add(page.route);
+        group.seen.add(id);
         continue;
       }
-      if (group) key = `${key} ${page.route} ${change.afterY}`;
+      if (group) key = `${key} ${id} ${change.afterY}`;
       const { view, ...rest } = change;
       groups.set(key, {
         route: page.route,
+        ...(page.state && { state: page.state.name, steps: page.state.steps }),
+        ...(page.setup && { setup: true }),
+        id,
         routes: 1,
         before: view.before,
         after: view.after,
         pageWidth: view.width,
         beforeHeight: view.beforeHeight,
         afterHeight: view.afterHeight,
-        seen: new Set([page.route]),
+        seen: new Set([id]),
         ...rest,
       });
     }
@@ -573,20 +583,23 @@ export function toScenes(pages, { perRoute, maxScenes }) {
   const later = [];
   for (const scene of groups.values()) {
     if (scene.routes === 1) {
-      const count = taken.get(scene.route) ?? 0;
+      const count = taken.get(scene.id) ?? 0;
       if (count >= perRoute) {
         later.push(scene);
         continue;
       }
-      taken.set(scene.route, count + 1);
+      taken.set(scene.id, count + 1);
     }
     scenes.push(scene);
   }
   // What is left of the room in the video: the changes held back, in their order
   const all = [...scenes, ...later.slice(0, Math.max(0, maxScenes - scenes.length))];
   const chosen = new Set(all.slice(0, maxScenes));
-  return [...groups.values()].filter((scene) => chosen.has(scene)).map(({ seen, ...scene }) => scene);
+  return [...groups.values()].filter((scene) => chosen.has(scene)).map(({ seen, id, ...scene }) => scene);
 }
+
+/** What tells pages apart for the scenes: the route, or for a state its name, which is unique in its file. */
+const pageId = (page) => (page.setup ? "setup" : page.state ? `state:${page.state.name}` : page.route);
 
 /**
  * Remotion compiles JSX only outside node_modules. Installed from npm, the video of this
@@ -620,14 +633,23 @@ async function render(props, out, { preview = false } = {}) {
   return { video: outputLocation, preview: previewLocation };
 }
 
-/** The changes as Markdown, for a job summary or a comment. */
-export function renderMarkdown(pages, checked) {
+/**
+ * The changes as Markdown, for the summary of a job. `pages` are all that were compared, the
+ * states among them counted apart; `problems` the states that could not be compared.
+ */
+export function renderMarkdown(pages, checked, { problems = [], states = pages.filter((page) => page.state).length } = {}) {
   const changed = pages.filter((page) => page.changes.length);
   const total = changed.reduce((sum, page) => sum + page.changes.length, 0);
-  const lines = [`## ${total} visible change${total === 1 ? "" : "s"} on ${changed.length} of ${checked} pages`, ""];
-  if (!total) return lines.join("\n") + "No page looks different.\n";
+  const setup = changed.find((page) => page.setup);
+  const unread = problems.length ? ["", ...notCompared(problems)] : [];
+  if (setup) {
+    // Every other page would differ only because one side is logged out: there is no table
+    const [title, line] = setupLines(setup);
+    return [`## ${title}`, "", line, ...unread].join("\n") + "\n";
+  }
+  const lines = [`## ${total} visible change${total === 1 ? "" : "s"} on ${counted(changed, checked, states)}`, ""];
+  if (!total) return lines.join("\n") + "No page looks different.\n" + (unread.length ? unread.slice(1).join("\n") + "\n" : "");
   lines.push("| Page | Change | Where |", "| --- | --- | --- |");
-  const kind = { added: "Added", removed: "Removed", changed: "Changed" };
   for (const page of changed) {
     for (const change of page.changes) {
       const where = change.page
@@ -635,10 +657,10 @@ export function renderMarkdown(pages, checked) {
         : change.type === "removed"
           ? `${change.beforeH} px at ${change.beforeY} px, before`
           : `${change.afterH} px at ${change.afterY} px${change.layer === "shell" ? ", outside the scrolling part" : ""}`;
-      // Until the table knows them: states reached on one side only show their kind as it is
-      lines.push(`| \`${page.route.replace(/\|/g, "\\|")}\` | ${kind[change.type] ?? change.type} | ${where} |`);
+      lines.push(`| ${pageCell(page.route, page.state?.name)} | ${changeCell(change)} | ${where} |`);
     }
   }
+  lines.push(...unread);
   if (changed.some((page) => page.unstable)) {
     lines.push("", "Parts of some pages differ between two visits of the same version and were left out.");
   }
@@ -712,6 +734,8 @@ async function main() {
         before: options.base ?? options.before,
         after: options.base ? options.head : options.after,
         checked: pages.length,
+        // How many of those were states: the comment counts them apart
+        ...(options.states && { checkedStates: pages.filter((page) => page.state).length }),
         pages: changed,
         ...(options.states && { problems }),
       },
@@ -729,15 +753,19 @@ async function main() {
       await narrate(scenes, options.out, options);
     }
     const texts = textsFor(options.language);
+    const setupPage = changed.find((page) => page.setup);
+    const checkedStates = pages.filter((page) => page.state).length;
+    const changedStates = changed.filter((page) => page.state).length;
     // A version by its short name: the host of a running site, seven characters of a commit
     const short = (version) => (/^https?:\/\//.test(version) ? new URL(version).host : /^[0-9a-f]{40}$/.test(version) ? version.slice(0, 7) : version);
     const props = {
       title: options.title,
-      summary: texts.summary(total, changed.length, pages.length),
+      summary: setupPage ? texts.loginSummary : texts.summary(total, changed.length - changedStates, pages.length - checkedStates, changedStates, checkedStates),
       language: options.language,
       facts: [
         [texts.changes, String(total)],
-        [texts.pages, texts.of(changed.length, pages.length)],
+        [texts.pages, texts.of(changed.length - changedStates, pages.length - checkedStates)],
+        ...(checkedStates ? [[texts.states, texts.of(changedStates, checkedStates)]] : []),
         [texts.before, options.beforeLabel || short(versions?.commits.before ?? options.before)],
         [texts.after, options.afterLabel || short(versions?.commits.after ?? options.after)],
       ],
@@ -753,12 +781,12 @@ async function main() {
     const { commentOnGitLab, inMergeRequest } = await import("./gitlab.mjs");
     if (inMergeRequest()) {
       const reel = video ? JSON.parse(readFileSync(join(options.out, "reel.json"), "utf8")) : {};
-      await commentOnGitLab({ pages: changed, checked: pages.length, scenes: reel.scenes, video });
+      await commentOnGitLab({ pages: changed, checked: pages.length, checkedStates: pages.filter((page) => page.state).length, problems, scenes: reel.scenes, video });
     } else {
       console.log("--comment works in a GitLab CI job for a merge request; on GitHub the action comments.");
     }
   }
-  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, renderMarkdown(pages, pages.length));
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, renderMarkdown(pages, pages.length, { problems }));
   if (process.env.GITHUB_OUTPUT) {
     // The heredoc form: a path may hold what a single line cannot
     const outputs = { changes: total, pages: changed.length, video, preview, report: join(options.out, "changes.json") };

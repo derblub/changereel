@@ -5,7 +5,10 @@ import { dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
+import { renderMarkdown, toScenes } from "../src/cli.mjs";
+import { commentBody } from "../src/comment.mjs";
 import { checkStates, describeStep, keyEvents, normalizeName, readStates, ROLES, sameName } from "../src/states.mjs";
+import { TEXTS, stopLine } from "../src/texts.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCHEMA = JSON.parse(readFileSync(join(HERE, "..", "schema", "states.schema.json"), "utf8"));
@@ -359,5 +362,123 @@ describe("steps", () => {
     assert.ok(sameName("Check out", "Check out"));
     assert.ok(!sameName("Log out", "log out"));
     assert.ok(!sameName("Logout", "Log out"));
+  });
+});
+
+describe("states in the summary, the comment and the scenes", () => {
+  const view = { before: "b.png", after: "a.png", width: 1280, beforeHeight: 800, afterHeight: 800 };
+  const header = () => ({ type: "changed", layer: "page", beforeY: 30, beforeH: 10, afterY: 30, afterH: 10, box: { x: 300, y: 0, width: 60, height: 10 }, view });
+  const lower = (y) => ({ type: "changed", layer: "page", beforeY: y, beforeH: 10, afterY: y, afterH: 10, box: null, view });
+  const whole = (type, stopped) => ({ type, page: true, beforeY: 0, beforeH: 800, afterY: 0, afterH: 800, box: null, view, stopped });
+  const unreached = whole("unreached", { side: "after", step: 0, path: "states[1].steps[0]", does: 'click button "Checkout"', reason: "not found" });
+  const reached = whole("reached", { side: "before", step: 0, path: "states[2].steps[0]", does: 'click button "Export"', reason: "not found" });
+  const gone = whole("unreached", { side: "after", step: null, path: "states[3].route", does: "load /old", reason: "HTTP 404" });
+  const dialog = { name: "Checkout dialog", steps: 2 };
+  // 12 routes and 2 states were compared; /cart and its dialog have the new link in the header
+  const pages = [
+    { route: "/cart", changes: [header()] },
+    { route: "/cart", state: dialog, changes: [header(), lower(400)] },
+    { route: "/settings", state: { name: "Billing tab", steps: 2 }, changes: [unreached] },
+    ...Array.from({ length: 11 }, (_, i) => ({ route: `/p${i}`, changes: [] })),
+  ];
+  const problems = [{ name: "Gift wrap", route: "/cart", before: 'step 1 (click button "Wrap as a gift"): not found', after: null }];
+  const setup = {
+    route: "/login",
+    setup: true,
+    changes: [whole("unreached", { side: "after", step: 1, path: "setup[1]", does: 'fill textbox "Password" from $CHANGEREEL_PASSWORD', reason: "not found" })],
+  };
+
+  test("a state is named with its route, its kinds of change are said, and the heading counts states apart", () => {
+    const markdown = renderMarkdown(pages, 14);
+    assert.match(markdown, /^## 4 visible changes on 1 of 12 pages and 2 of 2 states\n/);
+    assert.match(markdown, /\| `\/cart` \| Changed \| 10 px at 30 px \|/);
+    assert.match(markdown, /\| `\/cart` › Checkout dialog \| Changed \| 10 px at 400 px \|/);
+    assert.match(markdown, /\| `\/settings` › Billing tab \| Can no longer be reached \(step 1: click button “Checkout”, not found\) \| the whole page \|/);
+    const more = renderMarkdown([{ route: "/new", state: { name: "Export panel", steps: 2 }, changes: [reached] }, { route: "/old", state: { name: "Old", steps: 1 }, changes: [gone] }], 2);
+    assert.match(more, /\| `\/new` › Export panel \| Can be reached now \| the whole page \|/);
+    assert.match(more, /\| `\/old` › Old \| Can no longer be reached \(the page is not there\) \|/);
+    assert.match(more, /^## 2 visible changes on 0 of 0 pages and 2 of 2 states/);
+    // Without states the heading is what it always was
+    assert.match(renderMarkdown([{ route: "/", changes: [lower(10)] }, { route: "/a", changes: [] }], 2), /^## 1 visible change on 1 of 2 pages\n/);
+
+    const body = commentBody({ pages: pages.filter((page) => page.changes.length), checked: 14, checkedStates: 2 });
+    assert.match(body, /### 4 visible changes on 1 of 12 pages and 2 of 2 states/);
+    assert.match(body, /\| `\/cart` › Checkout dialog \| Changed \|/);
+    assert.match(body, /\| `\/settings` › Billing tab \| Can no longer be reached \(step 1: click button “Checkout”, not found\) \|/);
+    assert.doesNotMatch(body, /reached \(.*\) page/);
+    assert.match(commentBody({ pages: [], checked: 14, checkedStates: 1 }), /### No visible change on 13 pages and 1 state\n/);
+    assert.match(commentBody({ pages: [], checked: 14 }), /### No visible change on 14 pages\n/);
+  });
+
+  test("the comment names a state the same way in the rows of the video's scenes", () => {
+    const scenes = toScenes(pages.filter((page) => page.changes.length), { perRoute: 2, maxScenes: 8 });
+    const body = commentBody({ pages: pages.filter((page) => page.changes.length), checked: 14, checkedStates: 2, scenes });
+    assert.match(body, /\| 1 \| `\/cart` and 1 more \| Changed \|/);
+    assert.match(body, /\| 2 \| `\/cart` › Checkout dialog \| Changed \|/);
+    assert.match(body, /\| 3 \| `\/settings` › Billing tab \| Can no longer be reached \(step 1: click button “Checkout”, not found\) \|/);
+  });
+
+  test("states that could not be compared are listed under the table, also when nothing changed", () => {
+    const markdown = renderMarkdown(pages, 14, { problems });
+    assert.match(markdown, /\*\*Not compared\*\*\n\n- `\/cart` › Gift wrap: before: step 1 \(click button “Wrap as a gift”\): not found\n/);
+    assert.ok(markdown.indexOf("Not compared") > markdown.indexOf("| Page"));
+    assert.match(renderMarkdown([{ route: "/", changes: [] }], 1, { problems }), /No page looks different\.\n\*\*Not compared\*\*/);
+    const body = commentBody({ pages: [], checked: 3, checkedStates: 1, problems });
+    assert.match(body, /Every page looks as it did before\.\n\n\*\*Not compared\*\*\n\n- `\/cart` › Gift wrap: before: step 1/);
+    assert.doesNotMatch(renderMarkdown(pages, 14), /Not compared/);
+  });
+
+  test("a login that stopped on one side replaces the table with one line", () => {
+    const markdown = renderMarkdown([setup], 1);
+    assert.equal(
+      markdown,
+      "## The login no longer gets through\n\nThe login stopped on the version after, at step 2: fill textbox “Password” from $CHANGEREEL_PASSWORD, not found. " +
+        "It gets through on the version before. Nothing else was compared: every page would differ only by the login.\n",
+    );
+    const body = commentBody({ pages: [setup], checked: 1, scenes: toScenes([setup], { perRoute: 2, maxScenes: 8 }) });
+    assert.match(body, /### The login no longer gets through\n/);
+    assert.match(body, /The login stopped on the version after, at step 2/);
+    assert.doesNotMatch(body, /\| Page/);
+    const back = { ...setup, changes: [{ ...setup.changes[0], type: "reached", stopped: { ...setup.changes[0].stopped, side: "before" } }] };
+    assert.match(renderMarkdown([back], 1), /## The login gets through only now\n\nThe login stopped on the version before, at step 2.*It gets through on the version after\./);
+  });
+
+  test("a state is a page of its own for the scenes: one scene over a page and a state, and its own share", () => {
+    const scenes = toScenes(pages.filter((page) => page.changes.length), { perRoute: 2, maxScenes: 8 });
+    assert.deepEqual(
+      scenes.map((scene) => [scene.route, scene.state, scene.type, scene.routes]),
+      [
+        ["/cart", undefined, "changed", 2],
+        ["/cart", "Checkout dialog", "changed", 1],
+        ["/settings", "Billing tab", "unreached", 1],
+      ],
+    );
+    assert.deepEqual(scenes[2].stopped, unreached.stopped);
+    assert.equal(scenes[2].steps, 2);
+    assert.equal(scenes[2].page, true);
+    assert.equal("id" in scenes[0] || "seen" in scenes[0], false);
+    // --per-route holds for the dialog apart from its route: two of each, not two of both
+    const many = (state, at) => ({ route: "/cart", ...(state && { state: dialog }), changes: [lower(at), lower(at + 200), lower(at + 400)] });
+    const held = toScenes([many(false, 100), many(true, 150)], { perRoute: 2, maxScenes: 4 });
+    assert.deepEqual(held.map((scene) => [scene.state ?? "", scene.afterY]), [["", 100], ["", 300], ["Checkout dialog", 150], ["Checkout dialog", 350]]);
+    // The login that stopped is the first scene
+    const [first] = toScenes([{ route: "/", changes: [lower(10)] }, setup], { perRoute: 2, maxScenes: 8 });
+    assert.equal(first.setup, true);
+  });
+
+  test("the line under a scene says which step stopped, in English and German", () => {
+    const scene = { type: "unreached", page: true, state: "Checkout dialog", steps: 2, stopped: unreached.stopped };
+    assert.equal(stopLine(scene, TEXTS.en), "Step 1 of 2 stopped: click button “Checkout”, not found");
+    assert.equal(stopLine(scene, TEXTS.de), "Schritt 1 von 2 gescheitert: click button „Checkout“, nicht gefunden");
+    assert.equal(stopLine({ ...scene, stopped: gone.stopped }, TEXTS.en), "The page is not there: HTTP 404");
+    const now = { ...scene, type: "reached", stopped: reached.stopped };
+    assert.equal(stopLine(now, TEXTS.en), "Before, step 1 of 2 stopped: click button “Export”, not found");
+    assert.equal(stopLine(now, TEXTS.de), "Vorher scheiterte Schritt 1 von 2: click button „Export“, nicht gefunden");
+    const login = { type: "unreached", page: true, setup: true, stopped: setup.changes[0].stopped };
+    assert.equal(stopLine(login, TEXTS.en), "The login stopped on the version after: step 2, fill textbox “Password” from $CHANGEREEL_PASSWORD, not found");
+    assert.equal(stopLine(login, TEXTS.de), "Die Anmeldung brach in der neuen Version ab: Schritt 2, fill textbox „Password“ from $CHANGEREEL_PASSWORD, nicht gefunden");
+    assert.equal(stopLine({ type: "changed" }, TEXTS.en), null);
+    // Every language has every word
+    for (const texts of Object.values(TEXTS)) assert.deepEqual(Object.keys(texts).sort(), Object.keys(TEXTS.en).sort());
   });
 });
