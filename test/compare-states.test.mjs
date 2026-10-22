@@ -151,10 +151,13 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
     assert.ok(result.stderr.includes(`Not compared, 1 state:\n  /cart › Gift wrap: ${said}\n`), result.stderr);
 
     const report = JSON.parse(readFileSync(join(out, "changes.json"), "utf8"));
-    const shape = report.pages.map(({ changes, ...page }) => ({ ...page, changes: changes.map(({ type, stopped }) => ({ type, ...(stopped && { stopped }) })) }));
+    // Changes of a page come largest first, and their sizes depend on the fonts of the machine:
+    // which comes first is not what this test is about
+    const kinds = (changes) => changes.map(({ type, stopped }) => ({ type, ...(stopped && { stopped }) })).sort((a, b) => a.type.localeCompare(b.type));
+    const shape = report.pages.map(({ changes, ...page }) => ({ ...page, changes: kinds(changes) }));
     assert.deepEqual(shape, [
       // The title of the dialog changed; the dialog was reached on both sides
-      { route: "/cart", state: { name: "Checkout dialog", steps: 2 }, changes: [{ type: "removed" }, { type: "changed" }] },
+      { route: "/cart", state: { name: "Checkout dialog", steps: 2 }, changes: [{ type: "changed" }, { type: "removed" }] },
       {
         route: "/settings",
         state: { name: "Billing tab", steps: 2 },
