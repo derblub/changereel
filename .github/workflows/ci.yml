@@ -87,6 +87,10 @@ jobs:
           git add -A && git -c user.name=ci -c user.email=ci@example.com commit -q -m before
           cp -r "$GITHUB_WORKSPACE/test/site/states/after/." site/
           git add -A && git -c user.name=ci -c user.email=ci@example.com commit -q -m after
+      # A password made anew on every run: a fixed one in the repository looks like a leak to a
+      # secret scanner. It is passed on the step that uses the action, as the README says to.
+      - name: Make a password
+        run: echo "CANARY=canary-$(cat /proc/sys/kernel/random/uuid)" >> "$GITHUB_ENV"
       - uses: ./
         id: reel
         with:
@@ -100,13 +104,11 @@ jobs:
           comment: "false"
         env:
           CHANGEREEL_CWD: ${{ runner.temp }}/states
-          CHANGEREEL_TEST_PASSWORD: Zebra-7731-Quokka
+          CHANGEREEL_TEST_PASSWORD: ${{ env.CANARY }}
       - name: It logged in, reached the states and kept the password out of its report
         run: |
           report="${{ steps.reel.outputs.report }}"
           test "${{ steps.reel.outputs.changes }}" = 4 && test "${{ steps.reel.outputs.pages }}" = 3
           test "$(jq -r '[.pages[].changes[].type] | sort | join(" ")' "$report")" = "changed reached removed unreached"
           test "$(jq -r '"\(.checkedStates) \(.problems | length)"' "$report")" = "3 0"
-          if grep -rlaF "$CHANGEREEL_TEST_PASSWORD" "$(dirname "$report")"; then exit 1; fi
-        env:
-          CHANGEREEL_TEST_PASSWORD: Zebra-7731-Quokka
+          if grep -rlaF "$CANARY" "$(dirname "$report")"; then exit 1; fi
