@@ -1,0 +1,28 @@
+{
+  "$schema": "../../schema/states.schema.json",
+  "schemaVersion": 1,
+  "setup": [
+    { "action": "navigate", "path": "/login" },
+    { "action": "fill", "target": { "label": "Email" }, "value": "anna@lumen.example" },
+    { "action": "fill", "target": { "label": "Password" }, "valueFrom": { "env": "LUMEN_PASSWORD" } },
+    { "action": "click", "target": { "role": "button", "name": "Sign in" } },
+    { "action": "waitFor", "target": { "role": "button", "name": "Sign out" } }
+  ],
+  "states": [
+    {
+      "name": "Bag",
+      "route": "/",
+      "steps": [
+        { "action": "click", "target": { "role": "button", "name": "Bag" } },
+        { "action": "waitFor", "target": { "role": "dialog", "name": "Your bag" } }
+      ]
+    },
+    {
+      "name": "Account",
+      "route": "/account",
+      "steps": [
+        { "action": "waitFor", "target": { "role": "region", "name": "Your subscription" } }
+      ]
+    }
+  ]
+}

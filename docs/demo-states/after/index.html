@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Lumen Coffee</title>
+<style>
+  :root { --cream: #faf6ef; --paper: #fffdf9; --ink: #2a1f1a; --soft: #6b5a50; --line: #eadfd2; --accent: #c2410c; --sage: #5f7a4e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 17px/1.6 "DM Sans", system-ui, sans-serif; color: var(--ink); background: var(--cream); }
+  a { color: inherit; }
+  button { font: inherit; cursor: pointer; }
+  header { display: flex; align-items: center; gap: 36px; padding: 22px 72px; background: var(--paper); border-bottom: 1px solid var(--line); }
+  header .logo { font: 26px/1 "DM Serif Display", Georgia, serif; margin-right: auto; text-decoration: none; }
+  header nav { display: flex; gap: 30px; } header nav a { text-decoration: none; color: var(--soft); font-weight: 500; }
+  header .bag { padding: 9px 18px; border: 0; border-radius: 999px; background: var(--ink); color: var(--cream); font-weight: 600; font-size: 15px; line-height: 1.6; }
+  .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 56px; align-items: center; max-width: 1136px; margin: 0 auto; padding: 72px 72px 64px; }
+  h1 { font: 58px/1.05 "DM Serif Display", Georgia, serif; margin: 0 0 20px; letter-spacing: -0.01em; }
+  .lead { font-size: 20px; color: var(--soft); margin: 0 0 30px; max-width: 30em; }
+  .cta { display: inline-block; padding: 15px 28px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; text-decoration: none; font-weight: 600; }
+  .art { aspect-ratio: 1; border-radius: 28px; background: radial-gradient(circle at 30% 30%, #f3c98b, transparent 55%), radial-gradient(circle at 70% 75%, #b45a2c, transparent 60%), #7a3b1e; position: relative; overflow: hidden; }
+  .art::after { content: ""; position: absolute; inset: 22% 26%; border-radius: 50% 50% 46% 46%; background: #3b1d10; box-shadow: inset 18px 0 0 -8px #2a140b; transform: rotate(-24deg); }
+  section { max-width: 1136px; margin: 0 auto; padding: 24px 72px 56px; }
+  h2 { font: 36px/1.15 "DM Serif Display", Georgia, serif; margin: 0 0 28px; }
+  .beans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .bean { background: var(--paper); border: 1px solid var(--line); border-radius: 22px; padding: 22px; }
+  .pack { height: 150px; border-radius: 14px; margin-bottom: 18px; display: flex; align-items: flex-end; padding: 14px; color: #fff; font: 22px/1 "DM Serif Display", Georgia, serif; }
+  .bean h3 { margin: 0 0 4px; font-size: 19px; } .bean p { margin: 0; color: var(--soft); font-size: 15px; }
+  .bean .price { margin-top: 12px; font-weight: 700; }
+  footer { padding: 36px 72px; color: var(--soft); border-top: 1px solid var(--line); background: var(--paper); font-size: 15px; }
+  .drawer { position: fixed; top: 92px; right: 72px; width: 420px; padding: 28px; background: var(--paper); border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 24px 60px rgba(42, 31, 26, 0.22); visibility: hidden; opacity: 0; transform: translateY(12px); transition: opacity 0.25s, transform 0.25s, visibility 0.25s; }
+  .open .drawer { visibility: visible; opacity: 1; transform: none; }
+  .drawer .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .drawer h2 { font-size: 30px; margin: 0; }
+  .drawer .close { width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--soft); font-size: 20px; line-height: 1; }
+  .drawer ul { list-style: none; margin: 0; padding: 0; }
+  .drawer li { display: grid; grid-template-columns: 56px 1fr auto; gap: 14px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+  .drawer li .thumb { height: 56px; border-radius: 12px; }
+  .drawer li b { display: block; font-size: 16px; } .drawer li span { color: var(--soft); font-size: 14px; }
+  .drawer .sum { display: flex; justify-content: space-between; padding: 14px 0 18px; border-top: 1px solid var(--line); font-weight: 700; }
+  .drawer .pay { display: block; width: 100%; text-align: center; }
+  /* The delivery block has one fixed height on both versions, so the dialog keeps its height */
+  .free { display: flex; flex-direction: column; justify-content: center; height: 108px; overflow: hidden; margin: 0 0 16px; padding: 0 18px; border-radius: 16px; background: #eef2e8; color: #33452a; font-size: 15px; }
+  .free p { margin: 0 0 10px; } .free .line { display: flex; justify-content: space-between; margin: 0; } .free strong { font-weight: 700; }
+  .free .bar { height: 10px; border-radius: 999px; background: #d6dfcc; overflow: hidden; }
+  .free .bar div { height: 100%; width: 60%; border-radius: 999px; background: var(--sage); }
+  .free small { display: block; margin-top: 8px; font-size: 14px; color: #4b5f3e; }
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 22px; padding: 30px; }
+  .form { max-width: 460px; }
+  .form label { display: block; font-weight: 600; margin: 0 0 6px; }
+  .form input { display: block; width: 100%; margin: 0 0 18px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font: inherit; }
+  .muted { color: var(--soft); }
+  .account { display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: start; }
+  .plan h3 { margin: 0 0 6px; font: 26px/1.1 "DM Serif Display", Georgia, serif; }
+  .plan dl { display: grid; grid-template-columns: 150px 1fr; gap: 8px 16px; margin: 20px 0 24px; }
+  .plan dt { color: var(--soft); } .plan dd { margin: 0; font-weight: 600; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+  .ghost { padding: 13px 24px; border: 1px solid var(--ink); border-radius: 999px; background: none; color: var(--ink); font-weight: 600; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; }
+</style></head>
+<body>
+<header><a class="logo" href="/">Lumen Coffee</a><nav><a href="/">Shop</a><a href="/about.html">Our roastery</a><a href="/account">Account</a></nav><button class="bag" type="button" id="bag-button" aria-haspopup="dialog" aria-controls="bag">Bag<span aria-hidden="true"> · 2</span></button></header>
+<div class="hero"><div><h1>Coffee roasted in Vienna</h1><p class="lead">Single origin beans, roasted every Tuesday and sent the same week.</p><a class="cta" href="#">Shop the beans</a></div><div class="art"></div></div><section><h2>This week's beans</h2><div class="beans"><div class="bean"><div class="pack" style="background:linear-gradient(135deg,#8b5a2b,#c08a4e)">Brazil</div><h3>Brazil Cerrado</h3><p>Chocolate, hazelnut, a soft finish.</p><div class="price">€14 · 250 g</div></div><div class="bean"><div class="pack" style="background:linear-gradient(135deg,#7c2d12,#d9573a)">Kenya</div><h3>Kenya Nyeri</h3><p>Blackcurrant, bright and juicy.</p><div class="price">€17 · 250 g</div></div><div class="bean"><div class="pack" style="background:linear-gradient(135deg,#3b2416,#7a4a2e)">House</div><h3>House Espresso</h3><p>Caramel and cocoa, for the machine.</p><div class="price">€15 · 250 g</div></div></div></section>
+<footer>Lumen Coffee · roasted in small batches in Vienna · hello@lumen.example</footer>
+<div id="bag-layer">
+<div class="drawer" id="bag" role="dialog" aria-modal="true" aria-labelledby="bag-title">
+  <div class="top"><h2 id="bag-title">Your bag</h2><button class="close" type="button" id="bag-close" aria-label="Close">×</button></div>
+
+  <div class="free"><p><strong>Free delivery in Austria from €30</strong></p>
+    <div class="bar" role="progressbar" aria-label="Towards free delivery" aria-valuemin="0" aria-valuemax="30" aria-valuenow="18"><div></div></div>
+    <small>€12 to go: add a bag of beans and it ships free.</small></div>
+  <ul>
+    <li><div class="thumb" style="background:linear-gradient(135deg,#8b5a2b,#c08a4e)"></div><div><b>Brazil Cerrado</b><span>250 g · whole beans</span></div><b>€14</b></li>
+    <li><div class="thumb" style="background:linear-gradient(135deg,#e8dcc8,#cbb592)"></div><div><b>Paper filters</b><span>100 pieces · size 02</span></div><b>€4</b></li>
+  </ul>
+  <div class="sum"><span>Subtotal</span><span>€18</span></div>
+  <button class="cta pay" type="button">Check out</button>
+</div></div>
+<script>
+  const layer = document.getElementById("bag-layer");
+  const setOpen = (open) => { layer.classList.toggle("open", open); document.getElementById("bag-button").setAttribute("aria-expanded", String(open)); };
+  document.getElementById("bag-button").addEventListener("click", () => setOpen(true));
+  document.getElementById("bag-close").addEventListener("click", () => setOpen(false));
+  // A click outside the bag closes it, as does Escape
+  document.addEventListener("click", (event) => layer.classList.contains("open") && !event.target.closest("#bag, #bag-button") && setOpen(false));
+  document.addEventListener("keydown", (event) => event.key === "Escape" && setOpen(false));
+</script>
+</body></html>

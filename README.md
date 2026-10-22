@@ -104,6 +104,8 @@ Some of what a change does only shows after a click: a dialog, a menu, the secon
 changereel --base main --build "npm ci && npm run build" --serve "npm run preview -- --port {port}" --states changereel.states.json
 ```
 
+[docs/demo-states](docs/demo-states) is a sample of this: the roastery of the demo above, with a bag that opens on a click and an account behind a login, and [the states file](docs/demo-states/states.json) that reaches both.
+
 `setup` runs once on each version, before anything is captured, and every page and state is then seen logged in. Each state starts from its `route` and ends with a `waitFor` on what should be in the picture. The route does not have to be among the routes compared. With a states file a site needs no sitemap: then only the states and the `--routes` you name are compared.
 
 A step is one of these. Each takes a `timeoutMs` in milliseconds of its own, from 1 to 120000; the file can set one for all steps at its top (10000 if it does not).
@@ -146,7 +148,7 @@ Good to know:
 - Each visit reaches the state anew, and a page is visited `--passes` times and again when it shows a change. Steps that change data on the server (an order, a message) change it every time, so keep the steps to what only looks.
 - A `value` in the file is not secret: a `fill` that stops is described with it, in the log, the report and the video. Use `valueFrom` for anything that is.
 - When both versions talk to the same backend, a change the steps make on one shows on the other.
-- The steps run on every visit, so a state takes longer than a page: on the sample roastery in `docs/demo`, about 15 seconds for a state reached on both versions and about 40 for one reached on one only, which is visited again before it counts. The log ends with how long the states took.
+- The steps run on every visit, so a state takes longer than a page: on the sample roastery, about 15 seconds for a state reached on both versions and about 40 for one reached on one only, which is visited again before it counts. The log ends with how long the states took.
 
 ## In a pull request
 
@@ -348,6 +350,7 @@ npm install
 npm test
 node test/run-demo.mjs        # compares the two sample sites in test/site and renders out/changereel.mp4
 node docs/demo/render.mjs     # the demo of this README, narrated (needs ANTHROPIC_API_KEY and --voice)
+node docs/demo-states/render.mjs  # the same roastery with a bag and an account behind a login, through --states
 ```
 
 ## Contributing
