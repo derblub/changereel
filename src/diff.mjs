@@ -473,6 +473,34 @@ export function paint(buffer, boxes) {
 }
 
 /**
+ * Whether a change is only the noise of its two sides, painted over in different places. Each
+ * side learns its noise from its own visits: a random number whose first digit came up the
+ * same twice on one side is painted from the second digit there and from the first on the
+ * other, and the strip between is a difference that no box of either side covers. With the
+ * noise of both sides painted on both, the band of the change holds nothing else.
+ */
+export function onlyNoise(beforeBuffer, afterBuffer, change, beforeBoxes, afterBoxes, minPixels = 40) {
+  if (!beforeBoxes?.length && !afterBoxes?.length) return false;
+  if (!change.beforeH || change.beforeH !== change.afterH) return false;
+  const before = PNG.sync.read(beforeBuffer);
+  const after = PNG.sync.read(afterBuffer);
+  const shift = change.afterY - change.beforeY;
+  // A box of one side, moved to where the band sits on the other
+  const moved = (boxes, by) => (boxes ?? []).map((box) => ({ ...box, y: box.y + by }));
+  const boxes = { before: [...(beforeBoxes ?? []), ...moved(afterBoxes, -shift)], after: [...(afterBoxes ?? []), ...moved(beforeBoxes, shift)] };
+  for (const [png, side] of [[before, "before"], [after, "after"]]) {
+    const top = change[`${side}Y`];
+    for (const box of boxes[side]) {
+      for (let y = Math.max(box.y, top); y < Math.min(box.y + box.height, top + change[`${side}H`]); y++) {
+        png.data.fill(0x80, (y * png.width + box.x) * 4, (y * png.width + box.x + box.width) * 4);
+      }
+    }
+  }
+  const box = changedBox(before, after, change);
+  return !box || box.pixels < minPixels;
+}
+
+/**
  * Whether a change is mostly noise: at least `share` of it lies in or right next to a noisy
  * spot of its page. A random quote also moves the line under it and the button after it;
  * painting the quote does not cover those, so each box counts `margin` rows further up and

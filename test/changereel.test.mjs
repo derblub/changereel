@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { cpSync, symlinkSync, writeFileSync } from "node:fs";
 import { compare, parseArgs, renderMarkdown, toScenes } from "../src/cli.mjs";
 import { serveVersions } from "../src/versions.mjs";
-import { alignRows, diffPages, drawnSpan, mergeRuns, nearNoise, noiseBoxes, paint, trimBlank } from "../src/diff.mjs";
+import { alignRows, diffPages, drawnSpan, mergeRuns, nearNoise, noiseBoxes, onlyNoise, paint, trimBlank } from "../src/diff.mjs";
 import { collectRoutes, parseSitemap, slug, toRoute } from "../src/routes.mjs";
 import { serve } from "./serve.mjs";
 
@@ -190,6 +190,25 @@ describe("noise", () => {
     const removed = { beforeY: 900, beforeH: 40, afterY: 520, afterH: 0, box: null };
     assert.equal(nearNoise(removed, boxes, "after", 100), true);
     assert.equal(nearNoise({ ...removed, afterY: 800 }, boxes, "after", 100), false);
+  });
+
+  test("a random number whose first digit came up the same twice on one side is still only noise", () => {
+    // "Code: " and three digits; each side visited twice
+    const label = [10, 20, BLUE];
+    const before = [row(label, [40, 10, RED], [50, 10, GREEN], [60, 10, RED]), row(label, [40, 10, GREEN], [50, 10, RED], [60, 10, GREEN])];
+    const after = [row(label, [40, 10, BLUE], [50, 10, RED], [60, 10, RED]), row(label, [40, 10, BLUE], [50, 10, GREEN], [60, 10, GREEN])];
+    const was = noiseBoxes(...before);
+    const is = noiseBoxes(...after);
+    // Painted from the first digit on one side and from the second on the other
+    assert.ok(was[0].x < is[0].x);
+    const { changes } = diffPages(paint(before[0], was), paint(after[0], is));
+    assert.equal(changes.length, 1);
+    assert.equal(onlyNoise(paint(before[0], was), paint(after[0], is), changes[0], was, is), true);
+    // A label that changed next to the number stays a change
+    const renamed = row([10, 20, GREEN], [40, 10, BLUE], [50, 10, RED], [60, 10, RED]);
+    const [change] = diffPages(paint(before[0], was), paint(renamed, is)).changes;
+    assert.equal(onlyNoise(paint(before[0], was), paint(renamed, is), change, was, is), false);
+    assert.equal(onlyNoise(before[0], after[0], change, [], []), false);
   });
 
   test("nearNoise: a large change with a hairline of noise inside it stays", () => {

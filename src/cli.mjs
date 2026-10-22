@@ -18,7 +18,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { openBrowser } from "./browser.mjs";
 import { changeCell, counted, notCompared, pageCell, setupLines } from "./comment.mjs";
-import { diffPages, nearNoise, noiseBoxes, paint } from "./diff.mjs";
+import { diffPages, nearNoise, noiseBoxes, onlyNoise, paint } from "./diff.mjs";
 import { kokoroVoice, narrate } from "./narrate.mjs";
 import { collectRoutes, slug, toRoute } from "./routes.mjs";
 import { describeStep, readStates } from "./states.mjs";
@@ -227,7 +227,11 @@ function differences(name, { before, after }, options, page) {
     for (const change of diffPages(was.clean, is.clean).changes) {
       // What is left around a noisy spot after painting it over
       const wide = height(is.clean) && is.clean.readUInt32BE(16); // IHDR: width
-      if (nearNoise(change, is.noise, "after", wide, options.noiseMargin) || nearNoise(change, was.noise, "before", wide, options.noiseMargin)) {
+      if (
+        nearNoise(change, is.noise, "after", wide, options.noiseMargin) ||
+        nearNoise(change, was.noise, "before", wide, options.noiseMargin) ||
+        onlyNoise(was.clean, is.clean, change, was.noise, is.noise)
+      ) {
         continue;
       }
       found.push({
