@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cart</title>
+<style>body { font: 16px/1.5 system-ui, sans-serif; margin: 40px; color: #18181b; } button { font: inherit; padding: 8px 16px; }</style>
+</head>
+<body>
+<style>
+  .dialog { position: fixed; top: 120px; left: 50%; width: 400px; margin-left: -200px; padding: 24px; background: #fff; border: 2px solid #18181b; visibility: hidden; opacity: 0; transform: translateY(60px); transition: opacity 0.4s, transform 0.4s, visibility 0.4s; }
+  .dialog.open { visibility: visible; opacity: 1; transform: none; }
+</style>
+<h1>Cart</h1>
+<p>One chair, 120 €.</p>
+<button id="checkout">Checkout</button>
+<div class="dialog" id="dialog" role="dialog" aria-label="Checkout">
+  <h2>Review your order</h2>
+  <p>Pay 120 € now.</p>
+  <button id="pay">Pay</button>
+</div>
+<script>
+  checkout.addEventListener("click", () => dialog.classList.add("open"));
+  pay.addEventListener("click", () => (pay.textContent = "Paid"));
+</script>
+</body>
+</html>

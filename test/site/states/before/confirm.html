@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Delete</title>
+<style>body { font: 16px/1.5 system-ui, sans-serif; margin: 40px; color: #18181b; } button { font: inherit; padding: 8px 16px; }</style>
+</head>
+<body>
+<h1>Delete</h1>
+<button id="remove">Delete</button>
+<script>
+  remove.addEventListener("click", () => {
+    if (confirm("Delete the report?")) remove.insertAdjacentHTML("afterend", "<h2>Deleted</h2>");
+  });
+</script>
+</body>
+</html>

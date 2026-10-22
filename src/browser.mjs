@@ -10,6 +10,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PNG } from "pngjs";
+import { runSteps } from "./steps.mjs";
 
 const PAGE_TIMEOUT_MS = 30_000;
 /** Chromium cannot capture taller pictures in one piece; a page beyond this is cut off. */
@@ -53,12 +54,12 @@ function connect(url) {
       pending.set(id, { ok, fail, method });
       ws.send(JSON.stringify({ id, method, params, sessionId }));
     });
-  const once = (method, sessionId) =>
+  const once = (method, sessionId, timeout = PAGE_TIMEOUT_MS) =>
     new Promise((ok, fail) => {
       const timer = setTimeout(() => {
         listeners.delete(listener);
         fail(new Error(`Timed out waiting for ${method}`));
-      }, PAGE_TIMEOUT_MS);
+      }, timeout);
       const listener = (msg) => {
         if (msg.method !== method || msg.sessionId !== sessionId) return;
         clearTimeout(timer);
@@ -94,12 +95,30 @@ function connect(url) {
 }
 
 /**
- * A browser with one tab. `capture(url, viewport)` gives `{ page, layers }`: the whole page
- * as a PNG buffer for showing, and the pictures to compare. A page that scrolls as a whole
- * is one layer; a page that scrolls inside an element is a content and a shell layer, each
- * with its place (`x`, `y`) in the picture it is shown in.
+ * A browser with a tab for each version, "before" and "after", each in a context of its own:
+ * cookies are not kept apart by port, so with both versions on 127.0.0.1 a login on one side
+ * would otherwise be the other's too.
+ *
+ * - `capture(url, { side, width, height, ignore, sharp, steps, stateIgnore, base,
+ *   testIdAttribute, env })` gives `{ page, layers }`: the whole page as a PNG buffer for
+ *   showing, and the pictures to compare. A page that scrolls as a whole is one layer; a page
+ *   that scrolls inside an element is a content and a shell layer, each with its place (`x`,
+ *   `y`) in the picture it is shown in. With `steps` (a state's, from readStates) the page is
+ *   loaded, the steps run, and the picture is taken where they end; when one stops, the
+ *   picture is of where the page stands then, and the result has `stopped: { step, reason }`.
+ *   `base` is the address `navigate` paths go after (the origin of `url` when not given).
+ * - `run(side, steps, { width, height, base, testIdAttribute, env })` runs steps without
+ *   loading or capturing anything first, for a login: `{ reached: true }` or
+ *   `{ reached: false, step, reason }`.
+ * - `shootHere(side, { width, height, ignore, sharp })` captures the page as it stands, as
+ *   capture does after loading: the end of a login, or where it stopped.
+ * - `resetSide(side)` throws that side's context away and makes a fresh one: no cookies, no
+ *   storage, as for a first visit.
+ *
+ * Dialogs of a page (alert, confirm, prompt, beforeunload) would hold it until someone
+ * answers. They are accepted at once, and `onDialog({ side, type, message })` hears of each.
  */
-export async function openBrowser({ wait = 500 } = {}) {
+export async function openBrowser({ wait = 500, onDialog = () => {} } = {}) {
   const profileDir = mkdtempSync(join(tmpdir(), "changereel-"));
   const chrome = spawn(
     findChrome(),
@@ -128,35 +147,101 @@ export async function openBrowser({ wait = 500 } = {}) {
   const cdp = connect(endpoint);
   chrome.on("exit", (code) => cdp.lost(`Chromium exited (${code})`));
   await cdp.opened;
-  const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });
-  const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
-  await cdp.send("Page.enable", {}, sessionId);
-  await cdp.send("Network.enable", {}, sessionId);
-  await cdp.send(
-    "Emulation.setEmulatedMedia",
-    { features: [{ name: "prefers-reduced-motion", value: "reduce" }] },
-    sessionId,
-  );
 
-  async function capture(url, { width = 1280, height = 800, ignore = [], sharp = false } = {}) {
-    await cdp.send(
-      "Emulation.setDeviceMetricsOverride",
-      { width, height, deviceScaleFactor: 1, mobile: false },
+  async function openTab(side) {
+    const { browserContextId } = await cdp.send("Target.createBrowserContext");
+    const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank", browserContextId });
+    const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
+    const send = (method, params = {}) => cdp.send(method, params, sessionId);
+    await send("Page.enable");
+    await send("Network.enable");
+    await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+    // For finding what steps name, and for the handles to it
+    await send("DOM.enable");
+    await send("Accessibility.enable");
+    await send("Runtime.enable");
+    const off = cdp.on("Page.javascriptDialogOpening", sessionId, ({ type, message }) => {
+      send("Page.handleJavaScriptDialog", { accept: true, promptText: "" }).catch(() => {});
+      onDialog({ side, type, message });
+    });
+    return {
+      side,
+      browserContextId,
       sessionId,
-    );
+      send,
+      off,
+      once: (method, timeout) => cdp.once(method, sessionId, timeout),
+      on: (method, fn) => cdp.on(method, sessionId, fn),
+    };
+  }
+  const tabs = { before: await openTab("before"), after: await openTab("after") };
+  let last = tabs.before;
+  const tabOf = (side) => {
+    if (!Object.hasOwn(tabs, side)) throw new Error(`No side "${side}"`);
+    return (last = tabs[side]);
+  };
+
+  async function resetSide(side) {
+    const old = tabOf(side);
+    old.off();
+    await cdp.send("Target.disposeBrowserContext", { browserContextId: old.browserContextId });
+    last = tabs[side] = await openTab(side);
+  }
+
+  const viewport = (tab, width, height) =>
+    tab.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: false });
+
+  /** Loads a page and waits for its load event; throws on a network error or an HTTP error. */
+  async function load(tab, url, timeout) {
     let status = 0;
-    const off = cdp.on("Network.responseReceived", sessionId, ({ type, response }) => {
+    const off = tab.on("Network.responseReceived", ({ type, response }) => {
       if (type === "Document" && !status) status = response.status;
     });
-    const loaded = cdp.once("Page.loadEventFired", sessionId);
+    const loaded = tab.once("Page.loadEventFired", timeout);
+    // A navigation that fails never fires the event; its timer must not fail the run later
+    loaded.catch(() => {});
     try {
-      const nav = await cdp.send("Page.navigate", { url }, sessionId);
+      const nav = await tab.send("Page.navigate", { url });
       if (nav.errorText) throw new Error(nav.errorText);
       await loaded;
     } finally {
       off();
     }
     if (status >= 400) throw new Error(`HTTP ${status}`);
+  }
+
+  async function capture(url, { side = "before", width = 1280, height = 800, ignore = [], sharp = false, steps, stateIgnore = [], base, testIdAttribute, env } = {}) {
+    const tab = tabOf(side);
+    await viewport(tab, width, height);
+    await load(tab, url);
+    let stopped;
+    if (steps?.length) {
+      const done = await runSteps(tab, steps, {
+        base: base ?? new URL(url).origin,
+        load: (to, timeout) => load(tab, to, timeout),
+        testIdAttribute,
+        env,
+      });
+      if (!done.reached) stopped = { step: done.step, reason: done.reason };
+    }
+    const shot = await picture(tab, { width, height, ignore: [...ignore, ...stateIgnore], sharp });
+    return stopped ? { ...shot, stopped } : shot;
+  }
+
+  async function run(side, steps, { width = 1280, height = 800, base, testIdAttribute, env } = {}) {
+    const tab = tabOf(side);
+    await viewport(tab, width, height);
+    return runSteps(tab, steps, { base, load: (to, timeout) => load(tab, to, timeout), testIdAttribute, env });
+  }
+
+  async function shootHere(side, { width = 1280, height = 800, ignore = [], sharp = false } = {}) {
+    const tab = tabOf(side);
+    await viewport(tab, width, height);
+    return picture(tab, { width, height, ignore, sharp });
+  }
+
+  /** The pictures of the page as it stands: settled, moving parts stopped, whole. */
+  async function picture({ sessionId }, { width, height, ignore, sharp }) {
     // A selector the browser cannot read would silently hide nothing
     for (const selector of ignore) {
       const { exceptionDetails } = await cdp.send(
@@ -315,9 +400,10 @@ export async function openBrowser({ wait = 500 } = {}) {
     return { page, compared, sharp: { page: sharpPage, window: sharpWindow ?? null }, layers };
   }
 
-  /** Runs an expression in the page that was captured last. For looking into a finding. */
-  async function evaluate(expression) {
-    const { result } = await cdp.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }, sessionId);
+  /** Runs an expression in the page of a side, by default the one used last. For looking into a finding. */
+  async function evaluate(expression, side) {
+    const tab = side ? tabOf(side) : last;
+    const { result } = await tab.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
     return result.value;
   }
 
@@ -337,5 +423,5 @@ export async function openBrowser({ wait = 500 } = {}) {
     }
   }
 
-  return { capture, evaluate, close };
+  return { capture, run, shootHere, resetSide, evaluate, close };
 }

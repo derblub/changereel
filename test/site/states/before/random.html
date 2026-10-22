@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Code</title>
+<style>body { font: 16px/1.5 system-ui, sans-serif; margin: 40px; color: #18181b; } button { font: inherit; padding: 8px 16px; }</style>
+</head>
+<body>
+<h1>Code</h1>
+<button id="show">Show code</button>
+<div id="dialog" role="dialog" aria-label="Code" hidden>
+  <p>Your code: <span id="code"></span></p>
+</div>
+<script>
+  show.addEventListener("click", () => {
+    code.textContent = String(Math.random()).slice(2, 8);
+    dialog.hidden = false;
+  });
+</script>
+</body>
+</html>

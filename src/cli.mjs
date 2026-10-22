@@ -89,10 +89,10 @@ export function parseArgs(argv) {
  * captures of the same page is noise, and is painted over before the sides are compared.
  * Null when the page is not there on this side.
  */
-async function shoot(browser, url, options) {
+async function shoot(browser, url, options, which) {
   let first;
   try {
-    first = await browser.capture(url, { width: options.width, ignore: options.ignore, sharp: options.video });
+    first = await browser.capture(url, { side: which, width: options.width, ignore: options.ignore, sharp: options.video });
   } catch (err) {
     // Gone or never there. Any other answer (a login, a rate limit) is not a missing page
     if (/^HTTP (404|410)$/.test(err.message)) return null;
@@ -100,6 +100,7 @@ async function shoot(browser, url, options) {
   }
   for (const layer of first.layers) layer.noise = [];
   first.url = url;
+  first.which = which;
   for (const layer of first.layers) layer.clean = layer.png;
   for (let pass = 1; pass < options.passes; pass++) await revisit(browser, first, options);
   return first;
@@ -107,7 +108,7 @@ async function shoot(browser, url, options) {
 
 /** One more visit of a side: what differs from its first capture is noise as well. */
 async function revisit(browser, side, options) {
-  const again = await browser.capture(side.url, { width: options.width, ignore: options.ignore });
+  const again = await browser.capture(side.url, { side: side.which, width: options.width, ignore: options.ignore });
   for (const layer of side.layers) {
     const other = again.layers.find((l) => l.name === layer.name);
     if (!other) continue;
@@ -138,7 +139,7 @@ export async function compare(options, log = console.log) {
       names.add(name);
       const sides = {};
       for (const which of ["before", "after"]) {
-        const side = await shoot(browser, options[which] + route, options);
+        const side = await shoot(browser, options[which] + route, options, which);
         sides[which] = side;
         if (!side) continue;
         writeFileSync(join(shots, `${name}-${which}.png`), side.page);

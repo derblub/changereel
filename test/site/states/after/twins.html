@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Two buttons</title>
+<style>body { font: 16px/1.5 system-ui, sans-serif; margin: 40px; color: #18181b; } button { font: inherit; padding: 8px 16px; }</style>
+</head>
+<body>
+<h1>Two buttons</h1>
+<p><button id="first">Add</button> <button id="second">Add</button></p>
+<p><button class="save" style="visibility: hidden">Save</button> <button class="save" id="save">Save</button></p>
+<p id="out">Nothing added.</p>
+<script>
+  first.addEventListener("click", () => (out.textContent = "first"));
+  second.addEventListener("click", () => (out.textContent = "second"));
+</script>
+</body>
+</html>

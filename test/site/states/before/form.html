@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Search</title>
+<style>body { font: 16px/1.5 system-ui, sans-serif; margin: 40px; color: #18181b; } button { font: inherit; padding: 8px 16px; }</style>
+</head>
+<body>
+<h1>Search</h1>
+<form id="search">
+  <p><label for="query">Search</label> <input id="query"></p>
+</form>
+<p><label for="nickname">Nickname</label> <input id="nickname"></p>
+<div id="out"></div>
+<script>
+  search.addEventListener("submit", (event) => {
+    event.preventDefault();
+    out.insertAdjacentHTML("beforeend", `<h2>Results for ${query.value}</h2>`);
+  });
+  // Hears only "change", as Vue's v-model.lazy does: nothing while typing
+  nickname.addEventListener("change", () => out.insertAdjacentHTML("beforeend", `<h2>Hello ${nickname.value}</h2>`));
+</script>
+</body>
+</html>

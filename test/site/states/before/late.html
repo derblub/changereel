@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Later</title>
+<style>body { font: 16px/1.5 system-ui, sans-serif; margin: 40px; color: #18181b; } button { font: inherit; padding: 8px 16px; }</style>
+</head>
+<body>
+<h1>Later</h1>
+<p id="here">The button comes in a moment.</p>
+<script>
+  // Somewhere below a second, as a page that loads its parts
+  setTimeout(() => {
+    const button = document.createElement("button");
+    button.textContent = "Continue";
+    button.addEventListener("click", () => here.insertAdjacentHTML("afterend", "<h2>Done</h2>"));
+    here.after(button);
+  }, 200 + Math.random() * 800);
+</script>
+</body>
+</html>

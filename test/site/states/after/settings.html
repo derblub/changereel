@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<style>body { font: 16px/1.5 system-ui, sans-serif; margin: 40px; color: #18181b; } button { font: inherit; padding: 8px 16px; }</style>
+</head>
+<body>
+<h1>Settings</h1>
+<div role="tablist">
+  <button role="tab" id="tab-profile" aria-selected="true" aria-controls="profile">Profile</button>
+  <button role="tab" id="tab-billing" aria-selected="false" aria-controls="billing">Payment</button>
+</div>
+<div role="tabpanel" id="profile" aria-labelledby="tab-profile"><p>Your name and picture.</p></div>
+<div role="tabpanel" id="billing" aria-labelledby="tab-billing" hidden><p>Your card ends in 4242.</p></div>
+<script>
+  for (const tab of document.querySelectorAll("[role=tab]")) {
+    tab.addEventListener("click", () => {
+      for (const other of document.querySelectorAll("[role=tab]")) {
+        other.setAttribute("aria-selected", String(other === tab));
+        document.getElementById(other.getAttribute("aria-controls")).hidden = other !== tab;
+      }
+    });
+  }
+</script>
+</body>
+</html>

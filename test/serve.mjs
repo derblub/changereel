@@ -7,7 +7,9 @@ import { pathToFileURL } from "node:url";
 export async function serve(root, port = 0) {
   const server = createServer((request, response) => {
     const path = request.url.split("?")[0];
-    const file = join(root, path === "/" ? "index.html" : path);
+    let file = join(root, path === "/" ? "index.html" : path);
+    // "/cart" is cart.html, as most servers of static sites have it
+    if (!existsSync(file) && existsSync(`${file}.html`)) file = `${file}.html`;
     if (!existsSync(file)) return response.writeHead(404).end("Not found");
     response.writeHead(200, { "Content-Type": file.endsWith(".xml") ? "application/xml" : "text/html" });
     response.end(readFileSync(file));
