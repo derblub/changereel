@@ -41,7 +41,7 @@ export function commentBody({ pages, checked, scenes = [], videoUrl, previewUrl,
     lines.push(told ? "| | Page | What changed |" : "| | Page | Change |", "| --- | --- | --- |");
     scenes.forEach((scene, index) => {
       const page = `\`${cell(scene.route)}\`${scene.routes > 1 ? ` and ${scene.routes - 1} more` : ""}`;
-      const what = told && scene.told ? cell(scene.text) : `${KIND[scene.type]}${scene.page ? " page" : ""}`;
+      const what = told && scene.told ? cell(scene.text) : `${KIND[scene.type] ?? scene.type}${scene.page ? " page" : ""}`;
       lines.push(`| ${index + 1} | ${page} | ${what} |`);
     });
     // A scene can stand for several changes: on several pages, or close together on one
@@ -50,7 +50,7 @@ export function commentBody({ pages, checked, scenes = [], videoUrl, previewUrl,
   } else {
     lines.push("| Page | Change |", "| --- | --- |");
     for (const page of changed) {
-      for (const change of page.changes) lines.push(`| \`${cell(page.route)}\` | ${KIND[change.type]}${change.page ? " page" : ""} |`);
+      for (const change of page.changes) lines.push(`| \`${cell(page.route)}\` | ${KIND[change.type] ?? change.type}${change.page ? " page" : ""} |`);
     }
   }
   const spoken = scenes.some((scene) => scene.audio);

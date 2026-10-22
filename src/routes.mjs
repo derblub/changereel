@@ -34,8 +34,12 @@ export async function findSitemap(site, reader = read) {
   return `${site}/sitemap.xml`;
 }
 
-/** Sorted, unique paths. Without a list, the union of both sitemaps: a new page is in one only. */
-export async function collectRoutes({ routes = [], sitemap, before, after }, reader = read) {
+/**
+ * Sorted, unique paths. Without a list, the union of both sitemaps: a new page is in one only.
+ * With `orNone` (there are states to compare) a site without a sitemap gives no routes instead
+ * of an error; a sitemap named with --sitemap must still be there.
+ */
+export async function collectRoutes({ routes = [], sitemap, before, after, orNone = false }, reader = read) {
   let found = routes;
   if (!found.length) {
     const sources = sitemap ? [sitemap] : [await findSitemap(after, reader), await findSitemap(before, reader)];
@@ -45,14 +49,14 @@ export async function collectRoutes({ routes = [], sitemap, before, after }, rea
       try {
         first = parseSitemap(await reader(source));
       } catch (err) {
-        if (sitemap || source.startsWith(after)) throw err;
+        if (sitemap || (source.startsWith(after) && !orNone)) throw err;
         continue; // the before site may have no sitemap yet
       }
       if (!first.index) locs.push(...first.locs);
       else for (const child of first.locs) locs.push(...parseSitemap(await reader(sitemap ? child : new URL(source).origin + toRoute(child))).locs);
     }
     found = locs.map(toRoute).filter(Boolean);
-    if (!found.length) throw new Error("No routes found. Pass --routes or --sitemap.");
+    if (!found.length && !orNone) throw new Error("No routes found. Pass --routes or --sitemap.");
   }
   return [...new Set(found.map((r) => (r.startsWith("/") ? r : `/${r}`)))].sort();
 }

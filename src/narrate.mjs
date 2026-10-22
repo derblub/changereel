@@ -22,7 +22,8 @@ import { textsFor } from "./texts.mjs";
 /** The sentence that needs no model. */
 export function plain(scene, language = "en") {
   const { plain: words } = textsFor(language);
-  if (scene.page) return words.page[scene.type](scene.route);
+  // A state reached on one side only reads, until it has words of its own, as a page added or removed
+  if (scene.page) return words.page[scene.type === "reached" ? "added" : scene.type === "unreached" ? "removed" : scene.type](scene.route);
   const where = scene.routes > 1 ? words.onPages(scene.routes) : scene.route === "/" ? words.onHome : words.on(scene.route);
   return words.sentence(scene.type, where);
 }
