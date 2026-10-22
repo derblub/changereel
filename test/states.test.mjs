@@ -6,7 +6,7 @@ import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import { renderMarkdown, toScenes } from "../src/cli.mjs";
-import { commentBody, notCompared } from "../src/comment.mjs";
+import { commentBody, counted, notCompared } from "../src/comment.mjs";
 import { checkStates, describeStep, keyEvents, normalizeName, readStates, ROLES, sameName } from "../src/states.mjs";
 import { TEXTS, stopLine } from "../src/texts.mjs";
 
@@ -445,19 +445,19 @@ describe("states in the summary, the comment and the scenes", () => {
 
   test("a state is named with its route, its kinds of change are said, and the heading counts states apart", () => {
     const markdown = renderMarkdown(pages, 14);
-    assert.match(markdown, /^## 4 visible changes on 1 of 12 pages and 2 of 2 states\n/);
+    assert.match(markdown, /^## 4 visible changes on 1 of 12 pages and in 2 of 2 states\n/);
     assert.match(markdown, /\| `\/cart` \| Changed \| 10 px at 30 px \|/);
     assert.match(markdown, /\| `\/cart` › Checkout dialog \| Changed \| 10 px at 400 px \|/);
     assert.match(markdown, /\| `\/settings` › Billing tab \| Can no longer be reached \(step 1: click button “Checkout”, not found\) \| the whole page \|/);
     const more = renderMarkdown([{ route: "/new", state: { name: "Export panel", steps: 2 }, changes: [reached] }, { route: "/old", state: { name: "Old", steps: 1 }, changes: [gone] }], 2);
     assert.match(more, /\| `\/new` › Export panel \| Can be reached now \| the whole page \|/);
     assert.match(more, /\| `\/old` › Old \| Can no longer be reached \(the page is not there\) \|/);
-    assert.match(more, /^## 2 visible changes on 0 of 0 pages and 2 of 2 states/);
+    assert.match(more, /^## 2 visible changes in 2 of 2 states\n/);
     // Without states the heading is what it always was
     assert.match(renderMarkdown([{ route: "/", changes: [lower(10)] }, { route: "/a", changes: [] }], 2), /^## 1 visible change on 1 of 2 pages\n/);
 
     const body = commentBody({ pages: pages.filter((page) => page.changes.length), checked: 14, checkedStates: 2 });
-    assert.match(body, /### 4 visible changes on 1 of 12 pages and 2 of 2 states/);
+    assert.match(body, /### 4 visible changes on 1 of 12 pages and in 2 of 2 states/);
     assert.match(body, /\| `\/cart` › Checkout dialog \| Changed \|/);
     assert.match(body, /\| `\/settings` › Billing tab \| Can no longer be reached \(step 1: click button “Checkout”, not found\) \|/);
     assert.doesNotMatch(body, /reached \(.*\) page/);
@@ -551,5 +551,26 @@ describe("states in the summary, the comment and the scenes", () => {
     assert.equal(stopLine({ type: "changed" }, TEXTS.en), null);
     // Every language has every word
     for (const texts of Object.values(TEXTS)) assert.deepEqual(Object.keys(texts).sort(), Object.keys(TEXTS.en).sort());
+  });
+});
+
+describe("counting pages and states", () => {
+  const page = (route) => ({ route, changes: [{}] });
+  const state = (name) => ({ route: "/", state: { name, steps: 2 }, changes: [{}] });
+
+  test("a side where nothing changed is left out, unless nothing changed at all", () => {
+    assert.equal(counted([state("Bag"), state("Account")], 4, 2), "in 2 of 2 states");
+    assert.equal(counted([page("/")], 4, 2), "on 1 of 2 pages");
+    assert.equal(counted([page("/"), state("Bag")], 4, 2), "on 1 of 2 pages and in 1 of 2 states");
+    assert.equal(counted([], 4, 2), "on 0 of 2 pages");
+    assert.equal(counted([page("/")], 3), "on 1 of 3 pages");
+  });
+
+  test("the summary of the video says the same, in English and German", () => {
+    assert.equal(TEXTS.en.summary(2, 0, 2, 2, 2), "2 changes in 2 of 2 states");
+    assert.equal(TEXTS.en.summary(3, 1, 2, 1, 2), "3 changes on 1 of 2 pages and in 1 of 2 states");
+    assert.equal(TEXTS.en.summary(1, 1, 5), "1 change on 1 of 5 pages");
+    assert.equal(TEXTS.de.summary(2, 0, 2, 2, 2), "2 Änderungen in 2 von 2 Zuständen");
+    assert.equal(TEXTS.de.summary(1, 1, 2, 1, 1), "1 Änderung auf 1 von 2 Seiten und in 1 von 1 Zustand");
   });
 });

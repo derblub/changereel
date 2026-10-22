@@ -39,13 +39,18 @@ export function changeCell(change) {
 }
 
 /**
- * How many of what was compared look different. States count apart from pages, "2 of 12
- * pages and 1 of 2 states"; without states it reads as it always did.
+ * How many of what was compared look different, with the word before it. States count apart
+ * from pages, "on 2 of 12 pages and in 1 of 2 states"; without states it reads as it always did.
  */
 export function counted(changed, checked, states = 0) {
-  if (!states) return `${changed.length} of ${checked} pages`;
+  if (!states) return `on ${changed.length} of ${checked} pages`;
   const onStates = changed.filter((page) => page.state).length;
-  return `${changed.length - onStates} of ${checked - states} pages and ${onStates} of ${states} state${states === 1 ? "" : "s"}`;
+  // As in the video: a side where nothing changed is left out, unless nothing changed at all
+  const parts = [
+    (changed.length - onStates || !onStates) && `on ${changed.length - onStates} of ${checked - states} pages`,
+    onStates && `in ${onStates} of ${states} state${states === 1 ? "" : "s"}`,
+  ];
+  return parts.filter(Boolean).join(" and ");
 }
 
 /** The finding of a login that gets through on one side only: the heading and the one line in place of a table. */
@@ -84,7 +89,7 @@ export function commentBody({ pages, checked, checkedStates = 0, problems = [], 
   const setup = changed.find((page) => page.setup);
   const where = counted(changed, checked, checkedStates);
   const nothing = checkedStates ? `${checked - checkedStates} pages and ${checkedStates} state${checkedStates === 1 ? "" : "s"}` : `${checked} pages`;
-  const title = setup ? setupLines(setup)[0] : total ? `${total} visible change${total === 1 ? "" : "s"} on ${where}` : `No visible change on ${nothing}`;
+  const title = setup ? setupLines(setup)[0] : total ? `${total} visible change${total === 1 ? "" : "s"} ${where}` : `No visible change on ${nothing}`;
   const lines = [MARKER, `### ${title}`, ""];
   // The video first where the comment can hold it (GitLab plays an uploaded one); else the
   // picture that moves and leads to it

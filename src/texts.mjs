@@ -17,9 +17,16 @@ export const TEXTS = {
     before: "Before",
     after: "After",
     more: (count) => `and ${count} more page${count > 1 ? "s" : ""}`,
+    // A side where nothing changed is left out: "on 0 of 2 pages and 2 of 2 states" reads as if
+    // something were missing on the pages
     summary: (changes, changed, pages, changedStates = 0, checkedStates = 0) =>
-      `${changes} change${changes === 1 ? "" : "s"} on ${changed} of ${pages} pages` +
-      (checkedStates ? ` and ${changedStates} of ${states(checkedStates, "state", "states")}` : ""),
+      `${changes} change${changes === 1 ? "" : "s"} ` +
+      [
+        (changed || !changedStates) && `on ${changed} of ${pages} pages`,
+        changedStates && `in ${changedStates} of ${states(checkedStates, "state", "states")}`,
+      ]
+        .filter(Boolean)
+        .join(" and "),
     loginSummary: "The login stopped, nothing else was compared",
     madeWith: "made with changereel",
     changes: "Changes",
@@ -66,8 +73,13 @@ export const TEXTS = {
     after: "Nachher",
     more: (count) => (count > 1 ? `und ${count} weitere Seiten` : "und eine weitere Seite"),
     summary: (changes, changed, pages, changedStates = 0, checkedStates = 0) =>
-      `${changes} ${changes === 1 ? "Änderung" : "Änderungen"} auf ${changed} von ${pages} Seiten` +
-      (checkedStates ? ` und ${changedStates} von ${states(checkedStates, "Zustand", "Zuständen")}` : ""),
+      `${changes} ${changes === 1 ? "Änderung" : "Änderungen"} ` +
+      [
+        (changed || !changedStates) && `auf ${changed} von ${pages} Seiten`,
+        changedStates && `in ${changedStates} von ${states(checkedStates, "Zustand", "Zuständen")}`,
+      ]
+        .filter(Boolean)
+        .join(" und "),
     loginSummary: "Die Anmeldung brach ab, sonst wurde nichts verglichen",
     madeWith: "erstellt mit changereel",
     changes: "Änderungen",

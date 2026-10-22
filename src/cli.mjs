@@ -666,7 +666,7 @@ export function renderMarkdown(pages, checked, { problems = [], states = pages.f
     const [title, line] = setupLines(setup);
     return [`## ${title}`, "", line, ...unread].join("\n") + "\n";
   }
-  const lines = [`## ${total} visible change${total === 1 ? "" : "s"} on ${counted(changed, checked, states)}`, ""];
+  const lines = [`## ${total} visible change${total === 1 ? "" : "s"} ${counted(changed, checked, states)}`, ""];
   if (!total) return lines.join("\n") + "No page looks different.\n" + (unread.length ? unread.slice(1).join("\n") + "\n" : "");
   lines.push("| Page | Change | Where |", "| --- | --- | --- |");
   for (const page of changed) {
@@ -762,7 +762,9 @@ async function main() {
       2,
     ) + "\n",
   );
-  console.log(`\n${total} change${total === 1 ? "" : "s"} on ${changed.length} of ${pages.length} routes`);
+  // States are not routes: counted apart, as in the summary
+  const statesSeen = pages.filter((page) => page.state).length;
+  console.log(`\n${total} change${total === 1 ? "" : "s"} ${options.states ? counted(changed, pages.length, statesSeen) : `on ${changed.length} of ${pages.length} routes`}`);
   let video = "";
   let preview = "";
   if (total && options.video) {
