@@ -1,0 +1,29 @@
+{
+  "$schema": "https://unpkg.com/changereel@0.9/schema/states.schema.json",
+  "schemaVersion": 1,
+  "setup": [
+    { "action": "navigate", "path": "/login" },
+    { "action": "fill", "target": { "label": "Email" }, "valueFrom": { "env": "CHANGEREEL_USER" } },
+    { "action": "fill", "target": { "label": "Password" }, "valueFrom": { "env": "CHANGEREEL_PASSWORD" } },
+    { "action": "press", "key": "Enter" },
+    { "action": "waitFor", "target": { "role": "button", "name": "Log out" } }
+  ],
+  "states": [
+    {
+      "name": "Checkout dialog",
+      "route": "/cart",
+      "steps": [
+        { "action": "click", "target": { "role": "button", "name": "Checkout" } },
+        { "action": "waitFor", "target": { "role": "dialog", "name": "Checkout" } }
+      ]
+    },
+    {
+      "name": "Billing tab",
+      "route": "/settings",
+      "steps": [
+        { "action": "click", "target": { "role": "tab", "name": "Billing" } },
+        { "action": "waitFor", "target": { "role": "tabpanel", "name": "Billing" } }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/changereel/schema/states.schema.json",
+  "title": "changereel states",
+  "description": "States of a site that changereel reaches with steps and compares between two versions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion"],
+  "anyOf": [{ "required": ["setup"] }, { "required": ["states"], "properties": { "states": { "type": "array", "minItems": 1 } } }],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "timeout": { "$ref": "#/$defs/timeout" },
+    "testIdAttribute": { "type": "string", "pattern": "^[a-zA-Z_:][-a-zA-Z0-9_:.]*$" },
+    "setup": { "$ref": "#/$defs/steps" },
+    "states": { "type": "array", "items": { "$ref": "#/$defs/state" } }
+  },
+  "$defs": {
+    "timeout": { "type": "integer", "minimum": 1, "maximum": 120000 },
+    "path": { "type": "string", "pattern": "^/(?![/\\\\])", "$comment": "A second slash or a backslash after the first would name a host." },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "route", "steps"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "route": { "$ref": "#/$defs/path" },
+        "steps": { "$ref": "#/$defs/steps" },
+        "ignore": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" },
+      "description": "Must end with a waitFor step.",
+      "$comment": "That the last step is waitFor is checked by changereel; JSON Schema has no way to name the last item."
+    },
+    "step": {
+      "type": "object",
+      "required": ["action"],
+      "properties": { "action": { "enum": ["navigate", "click", "fill", "press", "waitFor"] } },
+      "oneOf": [
+        { "$ref": "#/$defs/navigate" },
+        { "$ref": "#/$defs/click" },
+        { "$ref": "#/$defs/fill" },
+        { "$ref": "#/$defs/press" },
+        { "$ref": "#/$defs/waitFor" }
+      ]
+    },
+    "navigate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "path"],
+      "properties": { "action": { "const": "navigate" }, "path": { "$ref": "#/$defs/path" }, "timeout": { "$ref": "#/$defs/timeout" } }
+    },
+    "click": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "target"],
+      "properties": { "action": { "const": "click" }, "target": { "$ref": "#/$defs/target" }, "timeout": { "$ref": "#/$defs/timeout" } }
+    },
+    "fill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "target"],
+      "oneOf": [{ "required": ["value"] }, { "required": ["valueFrom"] }],
+      "properties": {
+        "action": { "const": "fill" },
+        "target": { "$ref": "#/$defs/target" },
+        "value": { "type": "string" },
+        "valueFrom": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["env"],
+          "properties": { "env": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" } }
+        },
+        "timeout": { "$ref": "#/$defs/timeout" }
+      }
+    },
+    "press": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "key"],
+      "properties": {
+        "action": { "const": "press" },
+        "key": {
+          "type": "string",
+          "pattern": "^((Shift|Control|Alt|Meta)\\+)*(Enter|Escape|Tab|Space|Backspace|Delete|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Home|End|PageUp|PageDown|[!-~])$"
+        },
+        "target": { "$ref": "#/$defs/target" },
+        "timeout": { "$ref": "#/$defs/timeout" }
+      }
+    },
+    "waitFor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "target"],
+      "properties": {
+        "action": { "const": "waitFor" },
+        "target": { "$ref": "#/$defs/target" },
+        "state": { "enum": ["visible", "hidden"] },
+        "timeout": { "$ref": "#/$defs/timeout" }
+      }
+    },
+    "target": {
+      "type": "object",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "required": ["role"],
+          "properties": { "role": { "$ref": "#/$defs/role" }, "name": { "type": "string", "minLength": 1 }, "nth": { "$ref": "#/$defs/nth" } }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["label"],
+          "properties": { "label": { "type": "string", "minLength": 1 }, "nth": { "$ref": "#/$defs/nth" } }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["testId"],
+          "properties": { "testId": { "type": "string", "minLength": 1 }, "nth": { "$ref": "#/$defs/nth" } }
+        },
+        {
+          "additionalProperties": false,
+          "required": ["css"],
+          "properties": { "css": { "type": "string", "minLength": 1 }, "nth": { "$ref": "#/$defs/nth" } }
+        }
+      ]
+    },
+    "nth": { "type": "integer", "minimum": 0 },
+    "role": {
+      "enum": [
+        "alert", "alertdialog", "article", "banner", "button", "cell", "checkbox", "columnheader", "combobox",
+        "complementary", "contentinfo", "dialog", "figure", "form", "grid", "gridcell", "group", "heading", "img",
+        "link", "list", "listbox", "listitem", "main", "menu", "menubar", "menuitem", "menuitemcheckbox",
+        "menuitemradio", "navigation", "option", "progressbar", "radio", "radiogroup", "region", "row", "rowheader",
+        "search", "searchbox", "separator", "slider", "spinbutton", "status", "switch", "tab", "table", "tablist",
+        "tabpanel", "textbox", "toolbar", "tooltip", "tree", "treeitem"
+      ]
+    }
+  }
+}
