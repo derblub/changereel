@@ -20,6 +20,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { PNG } from "pngjs";
 import { openBrowser } from "./browser.mjs";
+import { addChapters, chapters } from "./chapters.mjs";
 import { changeCell, counted, notCompared, pageCell, setupLines } from "./comment.mjs";
 import { diffPages, nearNoise, noiseBoxes, onlyNoise, paint } from "./diff.mjs";
 import { kokoroVoice, narrate } from "./narrate.mjs";
@@ -645,6 +646,8 @@ async function render(props, out, { preview = false } = {}) {
   const composition = await selectComposition({ serveUrl, id: "Reel", inputProps: props, browserExecutable });
   const outputLocation = join(out, "changereel.mp4");
   await renderMedia({ composition, serveUrl, codec: "h264", outputLocation, inputProps: props, browserExecutable });
+  // Only the MP4: a GIF has no chapters
+  addChapters(outputLocation, chapters(props.scenes, textsFor(props.language)));
   if (!preview) return { video: outputLocation };
   // Every fifth frame at two fifths of the size: about 3 MB for a minute
   const previewLocation = join(out, "changereel.gif");

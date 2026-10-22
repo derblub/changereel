@@ -45,6 +45,7 @@ import {
   duration,
   plan,
   sceneFrames,
+  sceneStarts,
 } from "./geometry.mjs";
 
 export { FPS, duration, sceneFrames };
@@ -610,12 +611,9 @@ export const Reel = ({ title, summary, scenes, language, facts = [] }) => {
   useFonts();
   const frame = useCurrentFrame();
   const texts = textsFor(language);
-  const starts = [];
-  let at = TITLE;
-  for (const scene of scenes) {
-    starts.push(at);
-    at += sceneFrames(scene);
-  }
+  const starts = sceneStarts(scenes);
+  // Where the closing card starts
+  const at = duration(scenes) - END;
   const current = starts.findLastIndex((start) => frame >= start);
   return (
     <AbsoluteFill style={{ background: INK }}>

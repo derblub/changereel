@@ -29,6 +29,8 @@ export const TEXTS = {
         .join(" and "),
     loginSummary: "The login stopped, nothing else was compared",
     madeWith: "made with changereel",
+    // The chapter of the closing card in a player's list of chapters
+    summaryChapter: "Summary",
     changes: "Changes",
     pages: "Pages",
     states: "States",
@@ -82,6 +84,7 @@ export const TEXTS = {
         .join(" und "),
     loginSummary: "Die Anmeldung brach ab, sonst wurde nichts verglichen",
     madeWith: "erstellt mit changereel",
+    summaryChapter: "Zusammenfassung",
     changes: "Änderungen",
     pages: "Seiten",
     states: "Zustände",

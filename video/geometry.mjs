@@ -29,6 +29,17 @@ export const sceneFrames = (scene) =>
 
 export const duration = (scenes) => TITLE + scenes.reduce((sum, scene) => sum + sceneFrames(scene), 0) + END;
 
+/** The frame each scene starts at: after the opening card, one after the other. The chapters of the MP4 start there too. */
+export function sceneStarts(scenes) {
+  const starts = [];
+  let at = TITLE;
+  for (const scene of scenes) {
+    starts.push(at);
+    at += sceneFrames(scene);
+  }
+  return starts;
+}
+
 /** Where the window sits on a page so that a band is in view: centred, kept inside the page. */
 export function scrollFor(y, height, pageHeight) {
   const top = height > VIEW_H ? y - 48 : y + height / 2 - VIEW_H / 2;
