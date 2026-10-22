@@ -14,7 +14,7 @@ const chrome = [process.env.CHROME_PATH, "/usr/bin/google-chrome-stable", "/usr/
 );
 
 // Steps as readStates gives them, with a short time so that a stop does not hold the tests up
-const steps = (...list) => list.map((step) => ({ timeout: 3000, ...step, ...(step.action === "waitFor" && { state: step.state ?? "visible" }) }));
+const steps = (...list) => list.map((step) => ({ timeoutMs: 3000, ...step, ...(step.action === "waitFor" && { state: step.state ?? "visible" }) }));
 const button = (name, nth) => ({ role: "button", name, ...(nth !== undefined && { nth }) });
 
 describe("states", { skip: !chrome && "no Chromium" }, () => {
@@ -85,15 +85,15 @@ describe("states", { skip: !chrome && "no Chromium" }, () => {
 
   test("a button under a cookie banner is not clicked, and the banner is named", async () => {
     const { stopped } = await browser.capture(was.url + "/banner", {
-      steps: steps({ action: "click", target: button("Subscribe"), timeout: 500 }, { action: "waitFor", target: { css: "h1" } }),
+      steps: steps({ action: "click", target: button("Subscribe"), timeoutMs: 500 }, { action: "waitFor", target: { css: "h1" } }),
     });
     assert.deepEqual(stopped, { step: 0, reason: "covered by div.cookie-banner" });
   });
 
   test("two buttons of one name need nth, and nth picks in document order", async () => {
     const add = (nth) =>
-      steps({ action: "click", target: button("Add", nth), timeout: 500 }, { action: "waitFor", target: { css: "#out" } });
-    const both = await browser.run("before", [{ action: "navigate", path: "/twins", timeout: 3000 }, ...add()], { base: was.url });
+      steps({ action: "click", target: button("Add", nth), timeoutMs: 500 }, { action: "waitFor", target: { css: "#out" } });
+    const both = await browser.run("before", [{ action: "navigate", path: "/twins", timeoutMs: 3000 }, ...add()], { base: was.url });
     assert.deepEqual(both, { reached: false, step: 1, reason: "found 2; add nth to pick one" });
     const { stopped } = await browser.capture(was.url + "/twins", { steps: add(1) });
     assert.equal(stopped, undefined);
@@ -103,11 +103,11 @@ describe("states", { skip: !chrome && "no Chromium" }, () => {
   });
 
   test("a hidden element is not visible and does not count as a second one", async () => {
-    const save = steps({ action: "click", target: { css: ".save" }, timeout: 500 }, { action: "waitFor", target: { css: "#out" } });
+    const save = steps({ action: "click", target: { css: ".save" }, timeoutMs: 500 }, { action: "waitFor", target: { css: "#out" } });
     assert.equal((await browser.capture(was.url + "/twins", { steps: save })).stopped, undefined);
-    const hidden = steps({ action: "click", target: { css: ".save", nth: 1 }, timeout: 500 }, { action: "waitFor", target: { css: "#out" } });
+    const hidden = steps({ action: "click", target: { css: ".save", nth: 1 }, timeoutMs: 500 }, { action: "waitFor", target: { css: "#out" } });
     assert.deepEqual((await browser.capture(was.url + "/twins", { steps: hidden })).stopped, { step: 0, reason: "found 1; there is no nth 1" });
-    const only = steps({ action: "waitFor", target: { css: "button.save[style]" }, timeout: 300 });
+    const only = steps({ action: "waitFor", target: { css: "button.save[style]" }, timeoutMs: 300 });
     assert.deepEqual(await browser.run("before", only), { reached: false, step: 0, reason: "not visible" });
   });
 
@@ -159,7 +159,7 @@ describe("states", { skip: !chrome && "no Chromium" }, () => {
       { action: "navigate", path: "/random" },
       { action: "waitFor", target: { role: "dialog", name: "Code" }, state: "hidden" },
       { action: "click", target: button("Show code") },
-      { action: "waitFor", target: { role: "dialog", name: "Code" }, state: "hidden", timeout: 300 },
+      { action: "waitFor", target: { role: "dialog", name: "Code" }, state: "hidden", timeoutMs: 300 },
     );
     assert.deepEqual(await browser.run("before", gone, { base: was.url }), { reached: false, step: 3, reason: "still visible" });
     const missing = steps({ action: "navigate", path: "/nowhere" }, { action: "waitFor", target: { css: "h1" } });
@@ -183,7 +183,7 @@ describe("states", { skip: !chrome && "no Chromium" }, () => {
     const busy = steps(
       { action: "navigate", path: "/busy" },
       { action: "click", target: button("Freeze") },
-      { action: "waitFor", target: { role: "heading", name: "Never" }, timeout: 1000 },
+      { action: "waitFor", target: { role: "heading", name: "Never" }, timeoutMs: 1000 },
     );
     const started = Date.now();
     const end = await browser.run("before", busy, { base: was.url });

@@ -20,19 +20,19 @@ export const ROLES = [
   "tabpanel", "textbox", "toolbar", "tooltip", "tree", "treeitem",
 ];
 
-export const DEFAULT_TIMEOUT = 10000;
-const MAX_TIMEOUT = 120000;
+export const DEFAULT_TIMEOUT_MS = 10000;
+const MAX_TIMEOUT_MS = 120000;
 const WAYS = ["role", "label", "testId", "css"];
 const FIELDS = {
-  top: ["$schema", "schemaVersion", "setup", "states", "timeout", "testIdAttribute"],
+  top: ["$schema", "schemaVersion", "setup", "states", "timeoutMs", "testIdAttribute"],
   state: ["name", "route", "steps", "ignore"],
   target: [...WAYS, "name", "nth"],
   valueFrom: ["env"],
-  navigate: ["action", "path", "timeout"],
-  click: ["action", "target", "timeout"],
-  fill: ["action", "target", "value", "valueFrom", "timeout"],
-  press: ["action", "key", "target", "timeout"],
-  waitFor: ["action", "target", "state", "timeout"],
+  navigate: ["action", "path", "timeoutMs"],
+  click: ["action", "target", "timeoutMs"],
+  fill: ["action", "target", "value", "valueFrom", "timeoutMs"],
+  press: ["action", "key", "target", "timeoutMs"],
+  waitFor: ["action", "target", "state", "timeoutMs"],
 };
 const REQUIRED = { navigate: ["path"], click: ["target"], fill: ["target"], press: ["key"], waitFor: ["target"] };
 
@@ -232,8 +232,8 @@ export function checkStates(data, env = process.env) {
     const missing = fields.filter((field) => !Object.hasOwn(value, field));
     if (missing.length) say(path, `needs ${and(missing)}`);
   };
-  const timeout = (value, path) => {
-    if (!isInteger(value) || value < 1 || value > MAX_TIMEOUT) say(path, `must be a whole number of milliseconds from 1 to ${MAX_TIMEOUT}`);
+  const timeoutMs = (value, path) => {
+    if (!isInteger(value) || value < 1 || value > MAX_TIMEOUT_MS) say(path, `must be a whole number of milliseconds from 1 to ${MAX_TIMEOUT_MS}`);
   };
   const route = (value, path) => {
     if (typeof value !== "string") return say(path, "must be a path such as /cart");
@@ -282,7 +282,7 @@ export function checkStates(data, env = process.env) {
     for (const [key, field] of Object.entries(value)) {
       const here = at(path, key);
       if (!FIELDS[action].includes(key)) unknown(path, key, FIELDS[action], action);
-      else if (key === "timeout") timeout(field, here);
+      else if (key === "timeoutMs") timeoutMs(field, here);
       else if (key === "path") route(field, here);
       else if (key === "target") target(field, here);
       else if (key === "value") {
@@ -361,7 +361,7 @@ export function checkStates(data, env = process.env) {
       if (typeof value !== "string") say(key, "must be the address of the schema");
     } else if (key === "schemaVersion") {
       if (value !== 1) say(key, "must be 1");
-    } else if (key === "timeout") timeout(value, key);
+    } else if (key === "timeoutMs") timeoutMs(value, key);
     else if (key === "testIdAttribute") {
       if (typeof value !== "string" || !/^[a-zA-Z_:][-a-zA-Z0-9_:.]*$/.test(value)) say(key, "must be an attribute name such as data-testid");
     } else if (key === "setup") steps(value, key);
@@ -410,11 +410,11 @@ function whereJson(text, err) {
 /** The file with what it leaves out filled in, so that nothing after this needs a default. */
 function normalize(data) {
   const file = structuredClone(data);
-  const timeout = file.timeout ?? DEFAULT_TIMEOUT;
-  const step = (s) => ({ ...s, timeout: s.timeout ?? timeout, ...(s.action === "waitFor" && { state: s.state ?? "visible" }) });
+  const timeoutMs = file.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const step = (s) => ({ ...s, timeoutMs: s.timeoutMs ?? timeoutMs, ...(s.action === "waitFor" && { state: s.state ?? "visible" }) });
   return {
     schemaVersion: 1,
-    timeout,
+    timeoutMs,
     testIdAttribute: file.testIdAttribute ?? "data-testid",
     setup: (file.setup ?? []).map(step),
     states: (file.states ?? []).map((state) => ({ ...state, steps: state.steps.map(step), ignore: state.ignore ?? [] })),

@@ -1,7 +1,7 @@
 {
   "$schema": "../../../schema/states.schema.json",
   "schemaVersion": 1,
-  "timeout": 1500,
+  "timeoutMs": 1500,
   "setup": [
     { "action": "navigate", "path": "/login" },
     { "action": "fill", "target": { "label": "Email" }, "value": "ada@example.com" },

@@ -10,13 +10,13 @@
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": 1 },
-    "timeout": { "$ref": "#/$defs/timeout" },
+    "timeoutMs": { "$ref": "#/$defs/timeoutMs" },
     "testIdAttribute": { "type": "string", "pattern": "^[a-zA-Z_:][-a-zA-Z0-9_:.]*$" },
     "setup": { "$ref": "#/$defs/steps" },
     "states": { "type": "array", "items": { "$ref": "#/$defs/state" } }
   },
   "$defs": {
-    "timeout": { "type": "integer", "minimum": 1, "maximum": 120000 },
+    "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 120000 },
     "path": { "type": "string", "pattern": "^/(?![/\\\\])", "$comment": "A second slash or a backslash after the first would name a host." },
     "state": {
       "type": "object",
@@ -52,13 +52,13 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["action", "path"],
-      "properties": { "action": { "const": "navigate" }, "path": { "$ref": "#/$defs/path" }, "timeout": { "$ref": "#/$defs/timeout" } }
+      "properties": { "action": { "const": "navigate" }, "path": { "$ref": "#/$defs/path" }, "timeoutMs": { "$ref": "#/$defs/timeoutMs" } }
     },
     "click": {
       "type": "object",
       "additionalProperties": false,
       "required": ["action", "target"],
-      "properties": { "action": { "const": "click" }, "target": { "$ref": "#/$defs/target" }, "timeout": { "$ref": "#/$defs/timeout" } }
+      "properties": { "action": { "const": "click" }, "target": { "$ref": "#/$defs/target" }, "timeoutMs": { "$ref": "#/$defs/timeoutMs" } }
     },
     "fill": {
       "type": "object",
@@ -75,7 +75,7 @@
           "required": ["env"],
           "properties": { "env": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" } }
         },
-        "timeout": { "$ref": "#/$defs/timeout" }
+        "timeoutMs": { "$ref": "#/$defs/timeoutMs" }
       }
     },
     "press": {
@@ -89,7 +89,7 @@
           "pattern": "^((Shift|Control|Alt|Meta)\\+)*(Enter|Escape|Tab|Space|Backspace|Delete|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Home|End|PageUp|PageDown|[!-~])$"
         },
         "target": { "$ref": "#/$defs/target" },
-        "timeout": { "$ref": "#/$defs/timeout" }
+        "timeoutMs": { "$ref": "#/$defs/timeoutMs" }
       }
     },
     "waitFor": {
@@ -100,7 +100,7 @@
         "action": { "const": "waitFor" },
         "target": { "$ref": "#/$defs/target" },
         "state": { "enum": ["visible", "hidden"] },
-        "timeout": { "$ref": "#/$defs/timeout" }
+        "timeoutMs": { "$ref": "#/$defs/timeoutMs" }
       }
     },
     "target": {

@@ -59,10 +59,13 @@ export function setupLines(page) {
   ];
 }
 
-/** The states that could not be compared, with what each side said: a list under the table. */
+/**
+ * The states that could not be compared, with what each side said and the path of the step it
+ * stopped at in the states file: a list under the table.
+ */
 export function notCompared(problems = []) {
   if (!problems.length) return [];
-  const side = (which, text) => text && `${which}: ${words(quoted(text))}`;
+  const side = (which, stop) => stop && `${which}: ${words(quoted(stop.text))}`;
   return [
     "**Not compared**",
     "",

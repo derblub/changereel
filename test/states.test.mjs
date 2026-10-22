@@ -6,7 +6,7 @@ import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import { renderMarkdown, toScenes } from "../src/cli.mjs";
-import { commentBody } from "../src/comment.mjs";
+import { commentBody, notCompared } from "../src/comment.mjs";
 import { checkStates, describeStep, keyEvents, normalizeName, readStates, ROLES, sameName } from "../src/states.mjs";
 import { TEXTS, stopLine } from "../src/texts.mjs";
 
@@ -40,7 +40,7 @@ const VALID = {
   "setup only, without states": { schemaVersion: 1, setup: EXAMPLE.setup },
   "every kind of step and target": {
     schemaVersion: 1,
-    timeout: 5000,
+    timeoutMs: 5000,
     testIdAttribute: "data-test",
     states: [
       {
@@ -48,7 +48,7 @@ const VALID = {
         route: "/search?q=1",
         ignore: [".ad", "#clock"],
         steps: [
-          { action: "fill", target: { label: "Search" }, value: "shoes", timeout: 200 },
+          { action: "fill", target: { label: "Search" }, value: "shoes", timeoutMs: 200 },
           { action: "fill", target: { testId: "note" }, value: "" },
           { action: "press", key: "Enter", target: { label: "Search" } },
           { action: "press", key: "Shift++" },
@@ -56,7 +56,7 @@ const VALID = {
           { action: "click", target: { css: ".result a", nth: 1 } },
           { action: "navigate", path: "/search/2" },
           { action: "click", target: { role: "link", nth: 0 } },
-          { action: "waitFor", target: { role: "progressbar" }, state: "hidden", timeout: 120000 },
+          { action: "waitFor", target: { role: "progressbar" }, state: "hidden", timeoutMs: 120000 },
         ],
       },
     ],
@@ -77,7 +77,10 @@ const INVALID = {
   "a step without action": [one([{ target: { role: "button" } }, waitFor()]), ["states[0].steps[0]", "needs action"]],
   "an unknown action": [one([{ action: "clik", target: { role: "button" } }, waitFor()]), ["states[0].steps[0].action", '"clik" is not an action; did you mean "click"?']],
   "an unknown field at the top": [one(undefined, { colour: "red" }), ["colour", "unknown field"]],
-  "a misspelt field at the top": [{ ...one(), timout: 5 }, ["timout", 'unknown field; did you mean "timeout"?']],
+  "a misspelt field at the top": [{ ...one(), timoutMs: 5 }, ["timoutMs", 'unknown field; did you mean "timeoutMs"?']],
+  // The name before the rename: an old file is told the new one, at the top and on a step
+  "the old name of the time limit at the top": [one(undefined, { timeout: 5000 }), ["timeout", 'unknown field; did you mean "timeoutMs"?']],
+  "the old name of the time limit on a step": [one([{ ...click(), timeout: 500 }, waitFor()]), ["states[0].steps[0].timeout", 'unknown field; did you mean "timeoutMs"?']],
   "an unknown field in a state": [
     { schemaVersion: 1, states: [{ name: "A", route: "/", steps: [waitFor()], stpes: [] }] },
     ["states[0].stpes", 'unknown field; did you mean "steps"?'],
@@ -158,8 +161,8 @@ const INVALID = {
     ["schemaVersion", "is 2, newer than this changereel reads (1); update changereel"],
   ],
   "schemaVersion missing": [{ states: one().states }, ["top level", "needs schemaVersion"]],
-  "timeout 0": [one(undefined, { timeout: 0 }), ["timeout", "must be a whole number of milliseconds from 1 to 120000"]],
-  "a step timeout too long": [one([click(), { ...waitFor(), timeout: 120001 }]), ["states[0].steps[1].timeout", "must be a whole number of milliseconds from 1 to 120000"]],
+  "timeoutMs 0": [one(undefined, { timeoutMs: 0 }), ["timeoutMs", "must be a whole number of milliseconds from 1 to 120000"]],
+  "a step timeoutMs too long": [one([click(), { ...waitFor(), timeoutMs: 120001 }]), ["states[0].steps[1].timeoutMs", "must be a whole number of milliseconds from 1 to 120000"]],
   "a bad testIdAttribute": [one(undefined, { testIdAttribute: "data test" }), ["testIdAttribute", "must be an attribute name such as data-testid"]],
   "an empty ignore selector": [{ schemaVersion: 1, states: [{ ...one().states[0], ignore: [".ad", ""] }] }, ["states[0].ignore[1]", "must be a CSS selector, not empty"]],
   "neither states nor setup": [{ schemaVersion: 1 }, ["top level", "needs states, or setup"]],
@@ -219,11 +222,34 @@ describe("states file", () => {
       ].join("\n"),
     });
     // Within the file, problems come as the file is written: setup before states when it is first
-    const mixed = { schemaVersion: 1, setup: [click({ role: "buton" }), waitFor()], timeout: 0, states: [{ name: "A", route: "a", steps: [{ action: "fill", target: {} }] }] };
+    const mixed = { schemaVersion: 1, setup: [click({ role: "buton" }), waitFor()], timeoutMs: 0, states: [{ name: "A", route: "a", steps: [{ action: "fill", target: {} }] }] };
     assert.deepEqual(
       checkStates(mixed, ENV).map(({ path }) => path),
-      ["setup[0].target.role", "timeout", "states[0].route", "states[0].steps", "states[0].steps[0]", "states[0].steps[0].target"],
+      ["setup[0].target.role", "timeoutMs", "states[0].route", "states[0].steps", "states[0].steps[0]", "states[0].steps[0].target"],
     );
+  });
+
+  test("the old name of the time limit gets the new one suggested on every kind of step", () => {
+    const steps = [
+      { action: "navigate", path: "/cart" },
+      click(),
+      { action: "fill", target: { label: "Email" }, value: "a@example.com" },
+      { action: "press", key: "Enter" },
+      waitFor(),
+    ];
+    for (const step of steps) {
+      const problems = checkStates(one([{ ...step, timeout: 500 }, waitFor()]), ENV);
+      assert.deepEqual(problems, [{ path: "states[0].steps[0].timeout", message: 'unknown field; did you mean "timeoutMs"?' }], step.action);
+    }
+    // In setup too, and the file is refused by readStates with the same line
+    const path = write({ schemaVersion: 1, setup: [{ ...click(), timeout: 500 }, waitFor()], timeout: 800, states: [] });
+    assert.throws(() => readStates(path, ENV), {
+      message: [
+        `${path} has 2 problems:`,
+        '  setup[0].timeout: unknown field; did you mean "timeoutMs"?',
+        '  timeout: unknown field; did you mean "timeoutMs"?',
+      ].join("\n"),
+    });
   });
 
   test("one problem is one problem", () => {
@@ -280,10 +306,10 @@ describe("states file", () => {
   });
 
   test("the file read has its defaults filled in", () => {
-    const read = readStates(write(one([click(), waitFor()], { timeout: 3000 })), ENV);
+    const read = readStates(write(one([click(), waitFor()], { timeoutMs: 3000 })), ENV);
     assert.deepEqual(read, {
       schemaVersion: 1,
-      timeout: 3000,
+      timeoutMs: 3000,
       testIdAttribute: "data-testid",
       setup: [],
       states: [
@@ -292,15 +318,15 @@ describe("states file", () => {
           route: "/cart",
           ignore: [],
           steps: [
-            { ...click(), timeout: 3000 },
-            { ...waitFor(), timeout: 3000, state: "visible" },
+            { ...click(), timeoutMs: 3000 },
+            { ...waitFor(), timeoutMs: 3000, state: "visible" },
           ],
         },
       ],
     });
     const example = readStates(write(EXAMPLE), ENV);
-    assert.equal(example.timeout, 10000);
-    assert.equal(example.setup[0].timeout, 10000);
+    assert.equal(example.timeoutMs, 10000);
+    assert.equal(example.setup[0].timeoutMs, 10000);
     assert.equal(example.$schema, undefined);
   });
 
@@ -401,7 +427,16 @@ describe("states in the summary, the comment and the scenes", () => {
     { route: "/settings", state: { name: "Billing tab", steps: 2 }, changes: [unreached] },
     ...Array.from({ length: 11 }, (_, i) => ({ route: `/p${i}`, changes: [] })),
   ];
-  const problems = [{ name: "Gift wrap", route: "/cart", before: 'step 1 (click button "Wrap as a gift"): not found', after: null }];
+  // What each side says of a stop: the path in the file, what the step does, why, and the line printed
+  const stop = (path, does, reason, more = {}) => ({ path, does, reason, ...more, text: `${more.unstable ? "unstable: stopped on 1 of 2 visits, last at " : ""}${path} ${does}: ${reason}` });
+  const wrap = stop("states[5].steps[0]", 'click button "Wrap as a gift"', "not found");
+  const problems = [{ name: "Gift wrap", route: "/cart", before: wrap, after: null }];
+  // Both sides, a route that answered 404, a way that comes and goes
+  const many = [
+    { name: "Gift wrap", route: "/cart", before: wrap, after: wrap },
+    { name: "Old page", route: "/old", before: stop("states[3].route", "load /old", "HTTP 404"), after: stop("states[3].route", "load /old", "HTTP 410") },
+    { name: "Flaky <b>", route: "/flaky", before: null, after: stop("states[6].steps[1]", 'click button "Open | close"', "not found", { unstable: true }) },
+  ];
   const setup = {
     route: "/login",
     setup: true,
@@ -440,12 +475,28 @@ describe("states in the summary, the comment and the scenes", () => {
 
   test("states that could not be compared are listed under the table, also when nothing changed", () => {
     const markdown = renderMarkdown(pages, 14, { problems });
-    assert.match(markdown, /\*\*Not compared\*\*\n\n- `\/cart` › Gift wrap: before: step 1 \(click button “Wrap as a gift”\): not found\n/);
+    assert.match(markdown, /\*\*Not compared\*\*\n\n- `\/cart` › Gift wrap: before: states\[5\]\.steps\[0\] click button “Wrap as a gift”: not found\n/);
     assert.ok(markdown.indexOf("Not compared") > markdown.indexOf("| Page"));
     assert.match(renderMarkdown([{ route: "/", changes: [] }], 1, { problems }), /No page looks different\.\n\*\*Not compared\*\*/);
     const body = commentBody({ pages: [], checked: 3, checkedStates: 1, problems });
-    assert.match(body, /Every page looks as it did before\.\n\n\*\*Not compared\*\*\n\n- `\/cart` › Gift wrap: before: step 1/);
+    assert.match(body, /Every page looks as it did before\.\n\n\*\*Not compared\*\*\n\n- `\/cart` › Gift wrap: before: states\[5\]\.steps\[0\] click/);
     assert.doesNotMatch(renderMarkdown(pages, 14), /Not compared/);
+  });
+
+  test("a state that stopped on both sides, or came and went, names the path of the step for each side", () => {
+    const list = [
+      "**Not compared**",
+      "",
+      "- `/cart` › Gift wrap: before: states[5].steps[0] click button “Wrap as a gift”: not found; after: states[5].steps[0] click button “Wrap as a gift”: not found",
+      "- `/old` › Old page: before: states[3].route load /old: HTTP 404; after: states[3].route load /old: HTTP 410",
+      // The text is from the file: a tag is no tag, a bar does not end the cell
+      "- `/flaky` › Flaky &lt;b>: after: unstable: stopped on 1 of 2 visits, last at states[6].steps[1] click button “Open \\| close”: not found",
+    ];
+    assert.deepEqual(notCompared(many), list);
+    assert.deepEqual(notCompared([]), []);
+    for (const text of [renderMarkdown([{ route: "/", changes: [] }], 1, { problems: many }), commentBody({ pages: [], checked: 3, checkedStates: 3, problems: many })]) {
+      assert.ok(text.includes(list.join("\n")), text);
+    }
   });
 
   test("a login that stopped on one side replaces the table with one line", () => {

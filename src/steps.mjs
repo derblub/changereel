@@ -332,7 +332,7 @@ const loadReason = (err) => (/^Timed out/.test(err.message) ? "timed out" : err.
  */
 export async function runSteps(tab, steps, { base, load, testIdAttribute = "data-testid", env = process.env }) {
   for (const [index, step] of steps.entries()) {
-    const deadline = Date.now() + step.timeout;
+    const deadline = Date.now() + step.timeoutMs;
     // An attempt still waiting on the page when the time is over goes on once the page
     // answers; from then on it can no longer do anything to the page
     let over = false;
@@ -355,7 +355,7 @@ export async function runSteps(tab, steps, { base, load, testIdAttribute = "data
 async function runStep(tab, step, { base, load, testIdAttribute, env, deadline }) {
   if (step.action === "navigate") {
     try {
-      await within(load(base.replace(/\/+$/, "") + step.path, step.timeout), deadline + LATE_MS);
+      await within(load(base.replace(/\/+$/, "") + step.path, step.timeoutMs), deadline + LATE_MS);
       return null;
     } catch (err) {
       return loadReason(err);

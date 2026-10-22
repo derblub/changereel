@@ -11,9 +11,9 @@
  * one sentence what each change is, and with --voice the sentence is spoken (see
  * narrate.mjs). Writes the screenshots, changes.json and the video to --out (default ./out).
  *
- * Exit code 0 also when nothing changed (then there is no video), 3 when it ran but states
- * could not be compared (reached on neither version, or not the same on every visit), 2 when
- * it could not run.
+ * Exit code 0 also when nothing changed (then there is no video), 2 when it could not run
+ * or when states could not be compared (reached on neither version, or not the same on every
+ * visit); in the second case everything else is done and written first.
  */
 import { appendFileSync, copyFileSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
@@ -259,23 +259,37 @@ function differences(name, { before, after }, options, page) {
   return found;
 }
 
-/** A step as a person reads it: from 1, with what it does. "step 1 (click button "Checkout")" */
-const stepText = (stop, steps, route) =>
-  stop.step === null ? `loading ${route}` : `step ${stop.step + 1} (${describeStep(steps[stop.step])})`;
-const stopText = (stop, steps, route) => `${stepText(stop, steps, route)}: ${stop.reason}`;
+/**
+ * Where the steps of a state stopped: the path of the step in the file, what it does and why.
+ * A stop before the first step is the load of the route.
+ */
+function stopOf(stop, state, index, route) {
+  return {
+    path: stop.step === null ? `states[${index}].route` : `states[${index}].steps[${stop.step}]`,
+    does: stop.step === null ? `load ${route}` : describeStep(state.steps[stop.step]),
+    reason: stop.reason,
+  };
+}
 
 /**
  * How the visits of a side went: reached every time, stopped every time at the same step, or
- * neither, which is a way to the state that comes and goes.
+ * neither, which is a way to the state that comes and goes. `info` is what the list of
+ * problems says of the side; for a stop that comes and goes it is the last stop.
  */
-function outcome(side, steps, route) {
+function outcome(side, state, index, route) {
   const stops = side.visits.filter(Boolean);
   if (!stops.length) return { reached: true };
-  if (stops.length === side.visits.length && stops.every((stop) => stop.step === stops[0].step)) {
-    return { stopped: stops[0], text: stopText(stops[0], steps, route) };
-  }
-  return { text: `unstable: stopped on ${stops.length} of ${side.visits.length} visits, last at ${stopText(stops.at(-1), steps, route)}` };
+  const same = stops.length === side.visits.length && stops.every((stop) => stop.step === stops[0].step);
+  const stop = same ? stops[0] : stops.at(-1);
+  const where = stopOf(stop, state, index, route);
+  const text = `${where.path} ${where.does}: ${where.reason}`;
+  if (same) return { stopped: stop, info: { ...where, text } };
+  return { info: { ...where, unstable: true, text: `unstable: stopped on ${stops.length} of ${side.visits.length} visits, last at ${text}` } };
 }
+
+/** What each side of a problem said, in one line: "before: …; after: …" */
+const sidesText = (problem) =>
+  ["before", "after"].filter((which) => problem[which]).map((which) => `${which}: ${problem[which].text}`).join("; ");
 
 /**
  * A route, or a state reached from it, on both sides. Gives the page entry, or for a state
@@ -315,22 +329,17 @@ async function compareOne(browser, options, shots, name, route, state, index) {
     }
   }
   if (!state) return { page };
-  const was = outcome(before, state.steps, route);
-  const is = outcome(after, state.steps, route);
+  const was = outcome(before, state, index, route);
+  const is = outcome(after, state, index, route);
   if (was.reached && is.reached) return { page };
   const gone = was.reached && is.stopped ? "after" : is.reached && was.stopped ? "before" : null;
-  if (!gone) return { problem: { name: state.name, route, before: was.text ?? null, after: is.text ?? null } };
+  // Stopped on both sides, or on one and not the same on every visit: each side says where
+  if (!gone) return { problem: { name: state.name, route, before: was.info ?? null, after: is.info ?? null } };
   const stop = (gone === "after" ? is : was).stopped;
   page.changes = [
     {
       ...wholePage(gone === "after" ? "unreached" : "reached", name, sides, options),
-      stopped: {
-        side: gone,
-        step: stop.step,
-        path: stop.step === null ? `states[${index}].route` : `states[${index}].steps[${stop.step}]`,
-        does: stop.step === null ? `load ${route}` : describeStep(state.steps[stop.step]),
-        reason: stop.reason,
-      },
+      stopped: { side: gone, step: stop.step, ...stopOf(stop, state, index, route) },
     },
   ];
   delete page.unstable;
@@ -344,7 +353,7 @@ async function compareOne(browser, options, shots, name, route, state, index) {
  * not a broken login. Gives the page entry of the finding when only one side got through.
  */
 async function setUp(browser, options, shots, log) {
-  const { setup, testIdAttribute, timeout } = options.states;
+  const { setup, testIdAttribute, timeoutMs } = options.states;
   const ends = {};
   for (const which of ["before", "after"]) {
     const run = { width: options.width, base: options[which], testIdAttribute, env: options.env };
@@ -352,7 +361,7 @@ async function setUp(browser, options, shots, log) {
       if (round) await browser.resetSide(which);
       // Steps that do not start by going somewhere start on the home page of the version
       if (setup[0].action !== "navigate") {
-        const home = await browser.run(which, [{ action: "navigate", path: "/", timeout }], run);
+        const home = await browser.run(which, [{ action: "navigate", path: "/", timeoutMs }], run);
         if (!home.reached) throw new Error(`${options[which]}/: ${home.reason}`);
       }
       ends[which] = await browser.run(which, setup, run);
@@ -456,8 +465,7 @@ export async function compare(options, log = console.log, problems = []) {
       const label = state ? `${route} › ${state.name}` : route;
       if (problem) {
         problems.push(problem);
-        const sides = ["before", "after"].filter((which) => problem[which]).map((which) => `${which} ${problem[which]}`);
-        log(`? ${label}  not compared: ${sides.join("; ")}`);
+        log(`? ${label}  not compared: ${sidesText(problem)}`);
         continue;
       }
       if (!page) continue;
@@ -805,13 +813,11 @@ async function main() {
     appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(outputs).map(([key, value]) => `${key}<<${mark}\n${value}\n${mark}\n`).join(""));
   }
   // A state reached on neither version says the file does not fit the site: the run is done,
-  // but it does not pass. Not 2: everything was written, and a pipeline can tell the two apart
+  // but it does not pass
   if (problems.length) {
     console.error(`\nNot compared, ${problems.length} state${problems.length === 1 ? "" : "s"}:`);
-    for (const { name, route, before, after } of problems) {
-      console.error(`  ${route} › ${name}: ${[before && `before ${before}`, after && `after ${after}`].filter(Boolean).join("; ")}`);
-    }
-    process.exitCode = 3;
+    for (const problem of problems) console.error(`  ${problem.route} › ${problem.name}: ${sidesText(problem)}`);
+    process.exitCode = 2;
   }
 }
 

@@ -106,7 +106,7 @@ changereel --base main --build "npm ci && npm run build" --serve "npm run previe
 
 `setup` runs once on each version, before anything is captured, and every page and state is then seen logged in. Each state starts from its `route` and ends with a `waitFor` on what should be in the picture. The route does not have to be among the routes compared. With a states file a site needs no sitemap: then only the states and the `--routes` you name are compared.
 
-A step is one of these. Each takes a `timeout` in milliseconds of its own; the file can set one for all steps at its top (10000 if it does not).
+A step is one of these. Each takes a `timeoutMs` in milliseconds of its own, from 1 to 120000; the file can set one for all steps at its top (10000 if it does not).
 
 | Step | Fields | What it does |
 | --- | --- | --- |
@@ -118,7 +118,7 @@ A step is one of these. Each takes a `timeout` in milliseconds of its own; the f
 
 A target is found the way a person finds it: `{ "role": "button", "name": "Save" }` as a screen reader sees the element, `{ "label": "Email" }` for a form field, or `{ "testId": "save" }` for its `data-testid` (`testIdAttribute` at the top of the file names another attribute). A CSS selector, `{ "css": ".save" }`, works too, but breaks more easily when the markup changes, and both versions have to find the same element. Names are compared exactly and with case, after the whitespace is tidied. A target that finds more than one visible element stops the step (`found 2; add nth to pick one`): give `nth`, counted from 0. If the head adds a second "Save" button, the state does not quietly click another one. A `confirm()`, `alert()` or `prompt()` of the page is accepted, and the log says so.
 
-The same steps run on both versions. If a step works on one and not on the other, that is shown as what the change did, like a page that was added or removed: the state **can no longer be reached**, or **can be reached now**, with the step that stopped and why (`not found`, `not visible`, `covered by div.cookie-banner`). A stop on one version only is run again on both, `--confirm` times, and counts only if it happens every time at the same step. A way to the state that comes and goes is left out and listed under **Not compared**, as is a state that stops on both versions: that says the file does not fit the site. The rest of the run is done and written first. Then the command ends with exit code 3.
+The same steps run on both versions. If a step works on one and not on the other, that is shown as what the change did, like a page that was added or removed: the state **can no longer be reached**, or **can be reached now**, with the step that stopped and why (`not found`, `not visible`, `covered by div.cookie-banner`). A stop on one version only is run again on both, `--confirm` times, and counts only if it happens every time at the same step. A way to the state that comes and goes is left out and listed under **Not compared**, as is a state that stops on both versions: that says the file does not fit the site. Each version is listed with the path in the file of the step that stopped, such as `states[2].steps[1]` (`states[2].route` when the route itself answered 404 or 410), what it does and why; for a way that comes and goes it is the last stop. The rest of the run is done and written first. Then the command ends with exit code 2.
 
 A `setup` that stops on one version only is the one finding: **The login no longer gets through**, or **gets through only now**, with the step and the page where it stopped. Nothing else is compared then, because every page would differ only by the login. The login is run again from its first step, `--confirm` times, before it counts as stopped. When it stops on both versions there is nothing to compare: the run ends with exit code 2 and says where each stopped.
 
@@ -138,7 +138,7 @@ Passwords never go in the file. `fill` takes `valueFrom` with the name of an env
 
 `changereel --states changereel.states.json --check` checks the file without a browser and says where it is wrong, such as `states[0].steps[1].target`. It exits with 0 when the file is right and 2 when it is not. The variables that `valueFrom` names have to be set for it too; the message names one that is missing, never a value. A `css` selector the browser cannot read is only found when a run starts, before the first page. When the file names the `$schema`, your editor checks it as you write.
 
-In `changes.json` a state is an entry of `pages` with a `state` (its `name` and number of `steps`). One that stopped has the type `unreached` or `reached` and a `stopped` with the `side`, the `step`, its `path` in the file (`states[1].steps[0]`), what it `does` and the `reason`. A login that stopped is an entry with `setup: true`. `checked` counts the states, `checkedStates` says how many of them there were, and `problems` lists those that were not compared, with what each side said.
+In `changes.json` a state is an entry of `pages` with a `state` (its `name` and number of `steps`). One that stopped has the type `unreached` or `reached` and a `stopped` with the `side`, the `step`, its `path` in the file (`states[1].steps[0]`), what it `does` and the `reason`. A login that stopped is an entry with `setup: true`. `checked` counts the states, `checkedStates` says how many of them there were, and `problems` lists those that were not compared, each with its `name` and `route` and, for `before` and `after`, `null` when that version reached the state, or where it stopped: the `path` in the file, what it `does`, the `reason` and the `text` that is printed (`unstable: true` when the way comes and goes, with the last stop).
 
 Good to know:
 
@@ -288,7 +288,7 @@ changereel --before https://example.com --after http://localhost:3000
 | `--kokoro` | `python3` | The Python that Kokoro is installed in (or `CHANGEREEL_KOKORO`). |
 | `--language` | `en` | Language of the sentences and of the words in the video: `en` or `de`. Take a voice of the same language. |
 
-The command ends with exit code 0 when it ran, whether something changed or not; with 3 when it ran but states were not compared (see [Behind a click or a login](#behind-a-click-or-a-login)), after everything else is written; and with 2 when it could not run: a wrong option or states file, a site that does not answer, a login that stops on both versions.
+The command ends with exit code 0 when it ran, whether something changed or not; and with 2 when it could not run (a wrong option or states file, a site that does not answer, a login that stops on both versions) or when states were not compared (see [Behind a click or a login](#behind-a-click-or-a-login)). In the second case everything else is written first.
 
 Chrome or Chromium is found in the usual places; `CHROME_PATH` names another. The video is rendered with [Remotion](https://www.remotion.dev), which downloads its own browser on the first run. Remotion has its own [licence](https://www.remotion.dev/docs/license): free for individuals and small teams, paid for larger companies.
 

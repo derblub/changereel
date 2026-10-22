@@ -113,16 +113,17 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
       ENV,
     );
 
-  test("the command: logs in, compares routes and states in order, reports what stopped, ends with 3 for a state reached nowhere", async () => {
+  test("the command: logs in, compares routes and states in order, reports what stopped, ends with 2 for a state reached nowhere", async () => {
     const out = mkdtempSync(join(tmpdir(), "changereel-test-"));
     const started = Date.now();
+    const summary = join(out, "summary.md");
     const result = await run(
       ["--before", was.url, "--after", is.url, "--states", STATES, "--routes", "/cart /account", "--out", out, "--no-video", "--wait", "0", "--passes", "1", "--confirm", "1"],
-      { env: ENV },
+      { env: { ...ENV, GITHUB_STEP_SUMMARY: summary } },
     );
     const took = Date.now() - started;
-    // Not 2, which is a run that could not be done: this one is done and written
-    assert.equal(result.code, 3, result.stderr);
+    // The code of a run that could not run, but this one is done: the report is written below
+    assert.equal(result.code, 2, result.stderr);
     // Routes in their order, each followed by its states in the order of the file, then the rest
     const order = result.stdout
       .split("\n")
@@ -141,7 +142,11 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
     ]);
     assert.match(result.stdout, /✗ \/settings › Billing tab {2}can no longer be reached: step 1 \(click tab "Billing"\): not found/);
     assert.match(result.stdout, /after: the page showed a confirm "Delete the report\?", accepted/);
-    assert.match(result.stderr, /Not compared, 1 state:\n {2}\/cart › Gift wrap: before step 1 \(click button "Wrap as a gift"\): not found; after step 1/);
+    // Gift wrap is the sixth state and stops at its first step on both sides: each side says where
+    const stop = { path: "states[5].steps[0]", does: 'click button "Wrap as a gift"', reason: "not found", text: 'states[5].steps[0] click button "Wrap as a gift": not found' };
+    const said = `before: ${stop.text}; after: ${stop.text}`;
+    assert.ok(result.stdout.includes(`? /cart › Gift wrap  not compared: ${said}\n`), result.stdout);
+    assert.ok(result.stderr.includes(`Not compared, 1 state:\n  /cart › Gift wrap: ${said}\n`), result.stderr);
 
     const report = JSON.parse(readFileSync(join(out, "changes.json"), "utf8"));
     const shape = report.pages.map(({ changes, ...page }) => ({ ...page, changes: changes.map(({ type, stopped }) => ({ type, ...(stopped && { stopped }) })) }));
@@ -165,9 +170,12 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
     assert.equal(unreached.view.before, "shots/state-Billing-tab-before.png");
     assert.equal(unreached.view.after, "shots/state-Billing-tab-after.png");
     assert.ok(unreached.view.beforeHeight > 0 && unreached.view.afterHeight > 0);
-    assert.deepEqual(report.problems, [
-      { name: "Gift wrap", route: "/cart", before: 'step 1 (click button "Wrap as a gift"): not found', after: 'step 1 (click button "Wrap as a gift"): not found' },
-    ]);
+    assert.deepEqual(report.problems, [{ name: "Gift wrap", route: "/cart", before: stop, after: stop }]);
+    // Never "no change": the state is not among the pages that were compared
+    assert.equal(report.pages.some((page) => page.state?.name === "Gift wrap"), false);
+    // The job summary lists it with the paths as well, quotes the way a person writes them
+    const side = "states[5].steps[0] click button “Wrap as a gift”: not found";
+    assert.ok(readFileSync(summary, "utf8").includes(`- \`/cart\` › Gift wrap: before: ${side}; after: ${side}\n`), readFileSync(summary, "utf8"));
     // The random number and the late button reached on both sides, and nothing changed
     assert.match(result.stdout, /= \/random › Code/);
     assert.match(result.stdout, /= \/late › Continue later/);
@@ -193,7 +201,7 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
     // Fits only before: the tab is called "Payment" after
     const file = statesFile({
       schemaVersion: 1,
-      timeout: 1000,
+      timeoutMs: 1000,
       setup: [
         { action: "navigate", path: "/settings" },
         { action: "click", target: { role: "tab", name: "Billing" } },
@@ -221,7 +229,7 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
   test("a setup that stops on both sides stops the run, with the step on each side", async () => {
     const file = statesFile({
       schemaVersion: 1,
-      timeout: 500,
+      timeoutMs: 500,
       setup: [{ action: "navigate", path: "/settings" }, { action: "click", target: { role: "tab", name: "Shipping" } }, { action: "waitFor", target: { role: "tabpanel" } }],
       states: [],
     });
@@ -250,7 +258,7 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
     // The button is there on every other visit after, and always before
     const file = statesFile({
       schemaVersion: 1,
-      timeout: 500,
+      timeoutMs: 500,
       states: [{ name: "Flaky", route: "/flaky", steps: [{ action: "click", target: { role: "button", name: "Open" } }, { action: "waitFor", target: { role: "heading", name: "Opened" } }] }],
     });
     const lines = [];
@@ -258,16 +266,46 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
     const pages = await compare(options(file, "--confirm", "1"), (line) => lines.push(line), problems);
     assert.deepEqual(pages, []);
     assert.deepEqual(problems, [
-      { name: "Flaky", route: "/flaky", before: null, after: 'unstable: stopped on 1 of 2 visits, last at step 1 (click button "Open"): not found' },
+      {
+        name: "Flaky",
+        route: "/flaky",
+        before: null,
+        // The path of the last stop
+        after: {
+          path: "states[0].steps[0]",
+          does: 'click button "Open"',
+          reason: "not found",
+          unstable: true,
+          text: 'unstable: stopped on 1 of 2 visits, last at states[0].steps[0] click button "Open": not found',
+        },
+      },
     ]);
-    assert.match(lines[0], /^\? \/flaky › Flaky {2}not compared: after unstable/);
+    assert.match(lines[0], /^\? \/flaky › Flaky {2}not compared: after: unstable: stopped on 1 of 2 visits, last at states\[0\]\.steps\[0\] click button "Open"/);
+  });
+
+  test("a route that answers 404 on both sides is not compared, and the path is that of the route", async () => {
+    const file = statesFile({
+      schemaVersion: 1,
+      timeoutMs: 500,
+      states: [
+        { name: "Cart", route: "/cart", steps: [{ action: "waitFor", target: { role: "heading", name: "Cart" } }] },
+        { name: "Gone", route: "/nowhere", steps: [{ action: "waitFor", target: { role: "heading", name: "Never" } }] },
+      ],
+    });
+    const lines = [];
+    const problems = [];
+    const pages = await compare(options(file, "--confirm", "1"), (line) => lines.push(line), problems);
+    assert.deepEqual(pages.map((page) => page.route), ["/cart"]);
+    const stop = { path: "states[1].route", does: "load /nowhere", reason: "HTTP 404", text: "states[1].route load /nowhere: HTTP 404" };
+    assert.deepEqual(problems, [{ name: "Gone", route: "/nowhere", before: stop, after: stop }]);
+    assert.ok(lines.includes(`? /nowhere › Gone  not compared: before: ${stop.text}; after: ${stop.text}`), lines.join("\n"));
   });
 
   test("a login that fails on its first try gets through on the next, in a fresh context", async () => {
     // Odd visits of each server fail, and leave the context locked out: only a new one helps
     const file = statesFile({
       schemaVersion: 1,
-      timeout: 800,
+      timeoutMs: 800,
       setup: [
         { action: "navigate", path: "/login-twice" },
         { action: "fill", target: { label: "Email" }, value: "ada@example.com" },

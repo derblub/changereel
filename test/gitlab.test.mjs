@@ -70,6 +70,19 @@ describe("gitlab", () => {
     assert.equal(seen.at(-1).url, "/api/v4/projects/12/merge_requests/5/notes/9");
   });
 
+  test("states that were not compared are in the comment, with the path of the step that stopped", async () => {
+    const { seen, env, close } = await gitlab();
+    const after = { path: "states[2].steps[1]", does: 'click button "Checkout"', reason: "not found", text: 'states[2].steps[1] click button "Checkout": not found' };
+    const problems = [{ name: "Checkout dialog", route: "/cart", before: { ...after, path: "states[2].route", does: "load /cart", reason: "HTTP 404", text: "states[2].route load /cart: HTTP 404" }, after }];
+    assert.equal(await commentOnGitLab({ pages: [], checked: 2, checkedStates: 1, problems, env, log: () => {} }), "created");
+    close();
+    // The server keeps what it got as latin1; the comment is UTF-8
+    assert.match(
+      JSON.parse(Buffer.from(seen.at(-1).body, "latin1").toString()).body,
+      /- `\/cart` › Checkout dialog: before: states\[2\]\.route load \/cart: HTTP 404; after: states\[2\]\.steps\[1\] click button “Checkout”: not found/,
+    );
+  });
+
   test("without a token, or when GitLab says no, it tells and does not fail", async () => {
     const lines = [];
     assert.equal(await commentOnGitLab({ pages, checked: 2, env: { CI_API_V4_URL: "x", CI_PROJECT_ID: "1" }, log: (line) => lines.push(line) }), "none");
