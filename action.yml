@@ -24,6 +24,9 @@ inputs:
   ignore:
     description: "CSS selectors, separated by commas, of parts to leave out of the comparison: what is random or animated."
     default: ""
+  states:
+    description: "Path to a file of states to reach with clicks or a login and compare as well, relative to the repository. Empty compares only pages. Passwords the file takes from the environment go in 'env' of the step that uses the action, from secrets."
+    default: ""
   title:
     description: "Title on the first card of the video."
     default: ${{ github.event.pull_request.title || 'What changed' }}
@@ -140,6 +143,7 @@ runs:
         IN_HEAD: ${{ inputs.head }}
         IN_ROUTES: ${{ inputs.routes }}
         IN_IGNORE: ${{ inputs.ignore }}
+        IN_STATES: ${{ inputs.states }}
         IN_TITLE: ${{ inputs.title }}
         IN_VIDEO: ${{ inputs.video }}
         IN_PASSES: ${{ inputs.passes }}
@@ -156,6 +160,7 @@ runs:
         if [ -n "$IN_BUILD" ]; then args+=(--build "$IN_BUILD"); fi
         if [ -n "$IN_ROUTES" ]; then args+=(--routes "$IN_ROUTES"); fi
         if [ -n "$IN_IGNORE" ]; then args+=(--ignore "$IN_IGNORE"); fi
+        if [ -n "$IN_STATES" ]; then args+=(--states "$GITHUB_WORKSPACE/$IN_STATES"); fi
         if [ "$IN_VIDEO" = false ]; then args+=(--no-video); fi
         if [ "$IN_PREVIEW" != false ] && [ -n "$IN_PR" ]; then args+=(--preview); fi
         if [ -n "$IN_NARRATE" ]; then args+=(--narrate --model "$IN_NARRATE"); fi
@@ -165,14 +170,16 @@ runs:
         node "$GITHUB_ACTION_PATH/src/cli.mjs" "${args[@]}"
     - uses: actions/upload-artifact@v7
       id: upload
-      if: github.event.action != 'closed' && inputs.upload != 'false' && steps.reel.outputs.video != ''
+      # Also after a run that ended with exit code 2 for states it could not compare: its video
+      # and its report are written by then, and the comment says which states those are
+      if: github.event.action != 'closed' && !cancelled() && inputs.upload != 'false' && steps.reel.outputs.video != ''
       with:
         name: ${{ inputs.artifact-name }}
         path: ${{ steps.reel.outputs.video }}
         # The video itself, not a zip with it
         archive: false
     - name: Comment on the pull request
-      if: github.event.action != 'closed' && inputs.comment != 'false' && github.event.pull_request.number
+      if: github.event.action != 'closed' && !cancelled() && inputs.comment != 'false' && github.event.pull_request.number && steps.reel.outputs.report != ''
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}

@@ -1,0 +1,38 @@
+{
+  "$schema": "../../../schema/states.schema.json",
+  "schemaVersion": 1,
+  "timeout": 1500,
+  "setup": [
+    { "action": "navigate", "path": "/login" },
+    { "action": "fill", "target": { "label": "Email" }, "value": "ada@example.com" },
+    { "action": "fill", "target": { "label": "Password" }, "valueFrom": { "env": "CHANGEREEL_TEST_PASSWORD" } },
+    { "action": "press", "key": "Enter" },
+    { "action": "waitFor", "target": { "role": "button", "name": "Log out" } }
+  ],
+  "states": [
+    {
+      "name": "Checkout dialog",
+      "route": "/cart",
+      "steps": [
+        { "action": "click", "target": { "role": "button", "name": "Checkout" } },
+        { "action": "waitFor", "target": { "role": "dialog", "name": "Checkout" } }
+      ]
+    },
+    {
+      "name": "Billing tab",
+      "route": "/settings",
+      "steps": [
+        { "action": "click", "target": { "role": "tab", "name": "Billing" } },
+        { "action": "waitFor", "target": { "role": "tabpanel", "name": "Billing" } }
+      ]
+    },
+    {
+      "name": "Export panel",
+      "route": "/new",
+      "steps": [
+        { "action": "click", "target": { "role": "button", "name": "Export" } },
+        { "action": "waitFor", "target": { "role": "region", "name": "Export" } }
+      ]
+    }
+  ]
+}

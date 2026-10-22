@@ -66,3 +66,47 @@ jobs:
           test "${{ steps.reel.outputs.changes }}" = 6 && test -s "${{ steps.reel.outputs.video }}"
           test -s "$(dirname "${{ steps.reel.outputs.report }}")/audio/5.wav"
           test -n "${{ steps.reel.outputs.video-url }}"
+
+  # The action with a states file, on the two sample sites of the states: a login, a dialog
+  # with another title, a tab that was renamed, a panel that is new. The password reaches it
+  # the way a secret would, as an environment variable of the step that uses the action, so
+  # this also shows that `env:` reaches the steps of a composite action. It needs no secret
+  # and no write access, so it runs for forks as well. The comment and the preview belong to
+  # the job above; here only the report is looked at.
+  action-states:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Make a repository with two versions
+        run: |
+          mkdir "$RUNNER_TEMP/states" && cd "$RUNNER_TEMP/states"
+          git init -q -b main
+          cp "$GITHUB_WORKSPACE/test/serve.mjs" .
+          cp -r "$GITHUB_WORKSPACE/test/site/states/before" site
+          git add -A && git -c user.name=ci -c user.email=ci@example.com commit -q -m before
+          cp -r "$GITHUB_WORKSPACE/test/site/states/after/." site/
+          git add -A && git -c user.name=ci -c user.email=ci@example.com commit -q -m after
+      - uses: ./
+        id: reel
+        with:
+          base: HEAD~1
+          serve: node serve.mjs site {port}
+          routes: /account /cart
+          states: test/site/states/action.states.json
+          video: "false"
+          upload: "false"
+          preview: "false"
+          comment: "false"
+        env:
+          CHANGEREEL_CWD: ${{ runner.temp }}/states
+          CHANGEREEL_TEST_PASSWORD: Zebra-7731-Quokka
+      - name: It logged in, reached the states and kept the password out of its report
+        run: |
+          report="${{ steps.reel.outputs.report }}"
+          test "${{ steps.reel.outputs.changes }}" = 4 && test "${{ steps.reel.outputs.pages }}" = 3
+          test "$(jq -r '[.pages[].changes[].type] | sort | join(" ")' "$report")" = "changed reached removed unreached"
+          test "$(jq -r '"\(.checkedStates) \(.problems | length)"' "$report")" = "3 0"
+          if grep -rlaF "$CHANGEREEL_TEST_PASSWORD" "$(dirname "$report")"; then exit 1; fi
+        env:
+          CHANGEREEL_TEST_PASSWORD: Zebra-7731-Quokka

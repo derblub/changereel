@@ -20,6 +20,7 @@
 <p>
   <a href="#how-it-finds-a-change">How it works</a> ·
   <a href="#what-it-leaves-out-so-that-a-change-is-a-change">What it leaves out</a> ·
+  <a href="#behind-a-click-or-a-login">Clicks and logins</a> ·
   <a href="#in-a-pull-request">GitHub Action</a> ·
   <a href="#in-a-merge-request-on-gitlab">GitLab</a> ·
   <a href="#on-the-command-line">Command line</a> ·
@@ -71,6 +72,82 @@ The price is that a change that lies mostly inside or right next to an unstable 
 
 What you know to be random, name with `--ignore`. On the site this was tried on, two selectors (a testimonial picked at random, a logo whose gradient starts at a random point) took the comparison of a version with itself from 6 changes to none, and the comparison of two real versions to 14 changes, each of them one the commit had made.
 
+## Behind a click or a login
+
+Some of what a change does only shows after a click: a dialog, a menu, the second tab of a form, everything behind a login. Name these states in a file, and changereel reaches each on both versions and compares it like a page:
+
+```json
+{
+  "$schema": "https://unpkg.com/changereel@0.9/schema/states.schema.json",
+  "schemaVersion": 1,
+  "setup": [
+    { "action": "navigate", "path": "/login" },
+    { "action": "fill", "target": { "label": "Email" }, "valueFrom": { "env": "CHANGEREEL_USER" } },
+    { "action": "fill", "target": { "label": "Password" }, "valueFrom": { "env": "CHANGEREEL_PASSWORD" } },
+    { "action": "press", "key": "Enter" },
+    { "action": "waitFor", "target": { "role": "button", "name": "Log out" } }
+  ],
+  "states": [
+    {
+      "name": "Checkout dialog",
+      "route": "/cart",
+      "steps": [
+        { "action": "click", "target": { "role": "button", "name": "Checkout" } },
+        { "action": "waitFor", "target": { "role": "dialog", "name": "Checkout" } }
+      ]
+    }
+  ]
+}
+```
+
+```console
+changereel --base main --build "npm ci && npm run build" --serve "npm run preview -- --port {port}" --states changereel.states.json
+```
+
+`setup` runs once on each version, before anything is captured, and every page and state is then seen logged in. Each state starts from its `route` and ends with a `waitFor` on what should be in the picture. The route does not have to be among the routes compared. With a states file a site needs no sitemap: then only the states and the `--routes` you name are compared.
+
+A step is one of these. Each takes a `timeout` in milliseconds of its own; the file can set one for all steps at its top (10000 if it does not).
+
+| Step | Fields | What it does |
+| --- | --- | --- |
+| `navigate` | `path` | Loads the path on the version being run. Stops on a network error or an HTTP status of 400 or more. |
+| `click` | `target` | Clicks the middle of the element with the mouse, once it is visible, enabled, no longer moving and not covered by something else. |
+| `fill` | `target`, `value` or `valueFrom` | Types the text into the field, replacing what was in it. |
+| `press` | `key`, optional `target` | Presses a key such as `Enter`, `Tab`, `Shift+Tab` or `a`, with the target focused first when there is one. |
+| `waitFor` | `target`, optional `state` | Waits until the target is visible, or with `"state": "hidden"` until it is gone. |
+
+A target is found the way a person finds it: `{ "role": "button", "name": "Save" }` as a screen reader sees the element, `{ "label": "Email" }` for a form field, or `{ "testId": "save" }` for its `data-testid` (`testIdAttribute` at the top of the file names another attribute). A CSS selector, `{ "css": ".save" }`, works too, but breaks more easily when the markup changes, and both versions have to find the same element. Names are compared exactly and with case, after the whitespace is tidied. A target that finds more than one visible element stops the step (`found 2; add nth to pick one`): give `nth`, counted from 0. If the head adds a second "Save" button, the state does not quietly click another one. A `confirm()`, `alert()` or `prompt()` of the page is accepted, and the log says so.
+
+The same steps run on both versions. If a step works on one and not on the other, that is shown as what the change did, like a page that was added or removed: the state **can no longer be reached**, or **can be reached now**, with the step that stopped and why (`not found`, `not visible`, `covered by div.cookie-banner`). A stop on one version only is run again on both, `--confirm` times, and counts only if it happens every time at the same step. A way to the state that comes and goes is left out and listed under **Not compared**, as is a state that stops on both versions: that says the file does not fit the site. The rest of the run is done and written first. Then the command ends with exit code 2.
+
+A `setup` that stops on one version only is the one finding: **The login no longer gets through**, or **gets through only now**, with the step and the page where it stopped. Nothing else is compared then, because every page would differ only by the login. The login is run again from its first step, `--confirm` times, before it counts as stopped. When it stops on both versions there is nothing to compare: the run ends with exit code 2 and says where each stopped.
+
+Passwords never go in the file. `fill` takes `valueFrom` with the name of an environment variable, and changereel writes that value nowhere. In the action, pass the variables in `env` of the step, from secrets. GitHub gives a pull request from a fork no secrets, and a variable that is not set stops the run, so the step is skipped for forks:
+
+```yaml
+- uses: derblub/changereel@v0
+  if: github.event.pull_request.head.repo.full_name == github.repository # forks get no secrets
+  with:
+    build: npm ci && npm run build
+    serve: npm run preview -- --port {port}
+    states: changereel.states.json
+  env:
+    CHANGEREEL_USER: ${{ secrets.DEMO_USER }}
+    CHANGEREEL_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+```
+
+`changereel --states changereel.states.json --check` checks the file without a browser and says where it is wrong, such as `states[0].steps[1].target`. It exits with 0 when the file is right and 2 when it is not. The variables that `valueFrom` names have to be set for it too; the message names one that is missing, never a value. A `css` selector the browser cannot read is only found when a run starts, before the first page. When the file names the `$schema`, your editor checks it as you write.
+
+In `changes.json` a state is an entry of `pages` with a `state` (its `name` and number of `steps`). One that stopped has the type `unreached` or `reached` and a `stopped` with the `side`, the `step`, its `path` in the file (`states[1].steps[0]`), what it `does` and the `reason`. A login that stopped is an entry with `setup: true`. `checked` counts the states, `checkedStates` says how many of them there were, and `problems` lists those that were not compared, with what each side said.
+
+Good to know:
+
+- Use a test account with test data. What is behind the login ends up in the screenshots, the video, the artifact and, for a public repository, the preview in the comment. With `--narrate`, excerpts of the pages go to the model. See [SECURITY.md](SECURITY.md).
+- Each visit reaches the state anew, and a page is visited `--passes` times and again when it shows a change. Steps that change data on the server (an order, a message) change it every time, so keep the steps to what only looks.
+- A `value` in the file is not secret: a `fill` that stops is described with it, in the log, the report and the video. Use `valueFrom` for anything that is.
+- When both versions talk to the same backend, a change the steps make on one shows on the other.
+- The steps run on every visit, so a state takes longer than a page. The log ends with how long the states took.
+
 ## In a pull request
 
 The action builds and serves the base of the pull request and its head, compares them and renders the video. The pull request gets a comment with a moving preview of the video, what changed on which page, and a link to the video itself; a later run changes that comment instead of adding one. GitHub shows no video in a comment, so the preview is a small animated picture, kept on a branch of its own (`changereel-previews`); in a private repository the comment has the link only. A pull request that changes no page gets no comment.
@@ -107,6 +184,7 @@ jobs:
 | `head` | `HEAD` | Commit to show as the version after the change. |
 | `routes` | | Paths to compare. Empty reads them from the sitemaps of both versions. |
 | `ignore` | | CSS selectors, separated by commas, of parts to leave out of the comparison. |
+| `states` | | Path to a [states file](#behind-a-click-or-a-login), relative to the repository. Empty compares only pages. Passwords go in `env` of the step. |
 | `title` | title of the pull request | Title on the first card. |
 | `video` | `true` | `false` only compares. |
 | `passes` | `2` | How often each page is captured. |
@@ -187,6 +265,8 @@ changereel --before https://example.com --after http://localhost:3000
 | `--routes` | | Paths to compare, separated by spaces. Empty reads them from the sitemaps of both sites. |
 | `--sitemap` | | URL or file of one sitemap to read the routes from instead. |
 | `--ignore` | | CSS selectors, separated by commas, of parts to leave out of the comparison: a random testimonial, an animated logo. They stay in the video. |
+| `--states` | | A file of states to reach with clicks or a login, and compare as well. See [Behind a click or a login](#behind-a-click-or-a-login). |
+| `--check` | | With `--states`: only check the file and say where it is wrong. Needs no sites and no browser. |
 | `--out` | `out` | Directory for the screenshots, `changes.json` and `changereel.mp4`. |
 | `--title` | `What changed` | Title on the first card. |
 | `--before-label`, `--after-label` | | Names for the two versions on the first card, such as a branch. Default: the commit or the host. |

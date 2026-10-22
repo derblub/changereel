@@ -309,6 +309,26 @@ describe("states file", () => {
   });
 });
 
+describe("the README", () => {
+  const readme = readFileSync(join(HERE, "..", "README.md"), "utf8");
+  // A block of JSON that names schemaVersion is a whole file; any other block is a piece of one
+  const examples = [...readme.matchAll(/^```json\n([\s\S]*?)^```/gm)].map((match) => match[1]).filter((text) => text.includes("schemaVersion"));
+
+  test("shows a states file", () => {
+    assert.ok(examples.length >= 1);
+  });
+
+  examples.forEach((text, i) => {
+    test(`example ${i + 1} is a right file, for changereel and for the schema`, () => {
+      // Each variable the example takes a value from is set, to a dummy
+      const env = Object.fromEntries([...text.matchAll(/"env":\s*"([A-Za-z_][A-Za-z0-9_]*)"/g)].map((match) => [match[1], "dummy"]));
+      const file = readStates(write(text), env);
+      assert.ok(file.states.length || file.setup.length);
+      assert.ok(validate(JSON.parse(text)), JSON.stringify(validate.errors));
+    });
+  });
+});
+
 describe("steps", () => {
   test("described as they are written", () => {
     const cases = [
