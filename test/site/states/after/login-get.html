@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sign in</title>
+<style>body { font: 16px/1.5 system-ui, sans-serif; margin: 40px; color: #18181b; } button { font: inherit; padding: 8px 16px; }</style>
+</head>
+<body>
+<h1>Sign in</h1>
+<!-- Sent with GET and nothing to catch it: what was typed ends up in the address -->
+<form method="get" action="/account">
+  <p><label for="email">Email</label> <input id="email" name="email" type="email"></p>
+  <p><label for="password">Password</label> <input id="password" name="password" type="password"></p>
+  <button>Sign in</button>
+</form>
+</body>
+</html>

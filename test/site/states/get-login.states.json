@@ -1,0 +1,13 @@
+{
+  "$schema": "../../../schema/states.schema.json",
+  "schemaVersion": 1,
+  "timeout": 1500,
+  "setup": [
+    { "action": "navigate", "path": "/login-get" },
+    { "action": "fill", "target": { "label": "Email" }, "value": "ada@example.com" },
+    { "action": "fill", "target": { "label": "Password" }, "valueFrom": { "env": "CHANGEREEL_TEST_PASSWORD" } },
+    { "action": "press", "key": "Enter" },
+    { "action": "waitFor", "target": { "role": "button", "name": "Log out" } }
+  ],
+  "states": []
+}

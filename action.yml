@@ -170,8 +170,9 @@ runs:
         node "$GITHUB_ACTION_PATH/src/cli.mjs" "${args[@]}"
     - uses: actions/upload-artifact@v7
       id: upload
-      # Also after a run that ended with exit code 2 for states it could not compare: its video
-      # and its report are written by then, and the comment says which states those are
+      # Also after a run that ended with exit code 3 for states it could not compare: its video
+      # and its report are written by then, and the comment says which states those are. After
+      # exit code 2 there is no report, and so no comment
       if: github.event.action != 'closed' && !cancelled() && inputs.upload != 'false' && steps.reel.outputs.video != ''
       with:
         name: ${{ inputs.artifact-name }}

@@ -183,9 +183,14 @@ export async function openBrowser({ wait = 500, onDialog = () => {} } = {}) {
 
   async function resetSide(side) {
     const old = tabOf(side);
-    old.off();
-    await cdp.send("Target.disposeBrowserContext", { browserContextId: old.browserContextId });
+    try {
+      await cdp.send("Target.disposeBrowserContext", { browserContextId: old.browserContextId });
+    } catch {
+      // Gone already, or it would not go: the side gets its fresh context all the same
+    }
+    // The old tab answers its dialogs until the new one is there: a side is never without
     last = tabs[side] = await openTab(side);
+    old.off();
   }
 
   const viewport = (tab, width, height) =>

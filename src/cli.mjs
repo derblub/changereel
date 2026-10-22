@@ -11,16 +11,19 @@
  * one sentence what each change is, and with --voice the sentence is spoken (see
  * narrate.mjs). Writes the screenshots, changes.json and the video to --out (default ./out).
  *
- * Exit code 0 also when nothing changed (then there is no video), 2 when it could not run.
+ * Exit code 0 also when nothing changed (then there is no video), 3 when it ran but states
+ * could not be compared (reached on neither version, or not the same on every visit), 2 when
+ * it could not run.
  */
 import { appendFileSync, copyFileSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { PNG } from "pngjs";
 import { openBrowser } from "./browser.mjs";
 import { changeCell, counted, notCompared, pageCell, setupLines } from "./comment.mjs";
 import { diffPages, nearNoise, noiseBoxes, onlyNoise, paint } from "./diff.mjs";
 import { kokoroVoice, narrate } from "./narrate.mjs";
-import { collectRoutes, slug, toRoute } from "./routes.mjs";
+import { collectRoutes, slug } from "./routes.mjs";
 import { describeStep, readStates } from "./states.mjs";
 import { TEXTS, textsFor } from "./texts.mjs";
 import { serveVersions } from "./versions.mjs";
@@ -215,6 +218,9 @@ function differences(name, { before, after }, options, page) {
   };
   const pairs = shared ? before.layers.map((layer) => [layer, after.layers.find((l) => l.name === layer.name)]) : [[whole(before), whole(after)]];
   for (const [was, is] of pairs) {
+    // Decoded once for all changes of the pair, and only when one needs it
+    let decoded;
+    const pictures = () => (decoded ??= [PNG.sync.read(was.clean), PNG.sync.read(is.clean)]);
     if (was.unstable || is.unstable) page.unstable = true;
     const suffix = was.shown === "window" ? "-window" : "";
     const view = {
@@ -230,7 +236,7 @@ function differences(name, { before, after }, options, page) {
       if (
         nearNoise(change, is.noise, "after", wide, options.noiseMargin) ||
         nearNoise(change, was.noise, "before", wide, options.noiseMargin) ||
-        onlyNoise(was.clean, is.clean, change, was.noise, is.noise)
+        ((was.noise.length || is.noise.length) && onlyNoise(...pictures(), change, was.noise, is.noise))
       ) {
         continue;
       }
@@ -361,11 +367,12 @@ async function setUp(browser, options, shots, log) {
   }
   const gone = before.reached ? "after" : "before";
   const end = ends[gone];
-  // Where it stopped: the page the tab shows, or else the last page the steps went to
+  // Where it stopped: the page the tab shows, or else the last page the steps went to. Its
+  // path only: a login form sent with GET carries the password in the query
   const here = await browser.evaluate("location.href", gone);
   const route =
-    typeof here === "string" && here.startsWith(options[gone])
-      ? toRoute(here)
+    typeof here === "string" && here.startsWith(options[gone]) && URL.canParse(here)
+      ? new URL(here).pathname
       : (setup.slice(0, end.step + 1).findLast((step) => step.action === "navigate")?.path ?? "/");
   const sides = {};
   for (const which of ["before", "after"]) {
@@ -798,13 +805,13 @@ async function main() {
     appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(outputs).map(([key, value]) => `${key}<<${mark}\n${value}\n${mark}\n`).join(""));
   }
   // A state reached on neither version says the file does not fit the site: the run is done,
-  // but it does not pass
+  // but it does not pass. Not 2: everything was written, and a pipeline can tell the two apart
   if (problems.length) {
     console.error(`\nNot compared, ${problems.length} state${problems.length === 1 ? "" : "s"}:`);
     for (const { name, route, before, after } of problems) {
       console.error(`  ${route} › ${name}: ${[before && `before ${before}`, after && `after ${after}`].filter(Boolean).join("; ")}`);
     }
-    process.exitCode = 2;
+    process.exitCode = 3;
   }
 }
 

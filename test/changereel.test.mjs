@@ -209,6 +209,12 @@ describe("noise", () => {
     const [change] = diffPages(paint(before[0], was), paint(renamed, is)).changes;
     assert.equal(onlyNoise(paint(before[0], was), paint(renamed, is), change, was, is), false);
     assert.equal(onlyNoise(before[0], after[0], change, [], []), false);
+    // Decoded once for all changes of a page: the same answers, and the pictures stay as they were
+    const decoded = [PNG.sync.read(paint(before[0], was)), PNG.sync.read(paint(after[0], is))];
+    const copies = decoded.map((png) => Buffer.from(png.data));
+    assert.equal(onlyNoise(...decoded, changes[0], was, is), true);
+    assert.equal(onlyNoise(decoded[0], PNG.sync.read(paint(renamed, is)), change, was, is), false);
+    decoded.forEach((png, i) => assert.equal(Buffer.compare(png.data, copies[i]), 0));
   });
 
   test("nearNoise: a large change with a hairline of noise inside it stays", () => {

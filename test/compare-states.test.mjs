@@ -113,7 +113,7 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
       ENV,
     );
 
-  test("the command: logs in, compares routes and states in order, reports what stopped, ends with 2 for a state reached nowhere", async () => {
+  test("the command: logs in, compares routes and states in order, reports what stopped, ends with 3 for a state reached nowhere", async () => {
     const out = mkdtempSync(join(tmpdir(), "changereel-test-"));
     const started = Date.now();
     const result = await run(
@@ -121,7 +121,8 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
       { env: ENV },
     );
     const took = Date.now() - started;
-    assert.equal(result.code, 2, result.stderr);
+    // Not 2, which is a run that could not be done: this one is done and written
+    assert.equal(result.code, 3, result.stderr);
     // Routes in their order, each followed by its states in the order of the file, then the rest
     const order = result.stdout
       .split("\n")
@@ -228,5 +229,61 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
       message:
         'The setup stopped on both versions, so nothing can be compared:\n  before: step 2 (click tab "Shipping"): not found\n  after: step 2 (click tab "Shipping"): not found',
     });
+  });
+
+  test("a login form sent with GET puts the password in the address: the finding keeps its path only", async () => {
+    const out = mkdtempSync(join(tmpdir(), "changereel-test-"));
+    const file = join(HERE, "site", "states", "get-login.states.json");
+    const result = await run(
+      ["--before", was.url, "--after", is.url, "--states", file, "--routes", "/account", "--out", out, "--no-video", "--wait", "0", "--passes", "1", "--confirm", "0"],
+      { env: ENV },
+    );
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /✗ setup {2}no longer gets through: after stopped at step 5/);
+    const report = JSON.parse(readFileSync(join(out, "changes.json"), "utf8"));
+    // The after side stands on /account?email=…&password=…
+    assert.equal(report.pages[0].route, "/account");
+    for (const text of [...everything(out), result.stdout, result.stderr]) assert.equal(text.includes(SECRET), false);
+  });
+
+  test("a way to a state that comes and goes is not compared, and says so", async () => {
+    // The button is there on every other visit after, and always before
+    const file = statesFile({
+      schemaVersion: 1,
+      timeout: 500,
+      states: [{ name: "Flaky", route: "/flaky", steps: [{ action: "click", target: { role: "button", name: "Open" } }, { action: "waitFor", target: { role: "heading", name: "Opened" } }] }],
+    });
+    const lines = [];
+    const problems = [];
+    const pages = await compare(options(file, "--confirm", "1"), (line) => lines.push(line), problems);
+    assert.deepEqual(pages, []);
+    assert.deepEqual(problems, [
+      { name: "Flaky", route: "/flaky", before: null, after: 'unstable: stopped on 1 of 2 visits, last at step 1 (click button "Open"): not found' },
+    ]);
+    assert.match(lines[0], /^\? \/flaky › Flaky {2}not compared: after unstable/);
+  });
+
+  test("a login that fails on its first try gets through on the next, in a fresh context", async () => {
+    // Odd visits of each server fail, and leave the context locked out: only a new one helps
+    const file = statesFile({
+      schemaVersion: 1,
+      timeout: 800,
+      setup: [
+        { action: "navigate", path: "/login-twice" },
+        { action: "fill", target: { label: "Email" }, value: "ada@example.com" },
+        { action: "fill", target: { label: "Password" }, valueFrom: { env: "CHANGEREEL_TEST_PASSWORD" } },
+        { action: "press", key: "Enter" },
+        { action: "waitFor", target: { role: "button", name: "Log out" } },
+      ],
+      states: [{ name: "Signed in", route: "/account", steps: [{ action: "waitFor", target: { role: "button", name: "Log out" } }] }],
+    });
+    const problems = [];
+    const pages = await compare(options(file, "--confirm", "1"), () => {}, problems);
+    assert.deepEqual(problems, []);
+    assert.deepEqual(pages.map(({ route, state, changes }) => ({ route, state, changes: changes.length })), [
+      { route: "/account", state: { name: "Signed in", steps: 1 }, changes: 0 },
+    ]);
+    // The third visit fails again, and without a second try nothing gets through
+    await assert.rejects(compare(options(file, "--confirm", "0"), () => {}), /The setup stopped on both versions/);
   });
 });

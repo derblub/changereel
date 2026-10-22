@@ -5,8 +5,14 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export async function serve(root, port = 0) {
+  let visits = 0;
   const server = createServer((request, response) => {
     const path = request.url.split("?")[0];
+    // How often this server was visited, for a page that behaves otherwise every other time
+    if (path === "/visit.js") {
+      response.writeHead(200, { "Content-Type": "text/javascript", "Cache-Control": "no-store" });
+      return response.end(`const visit = ${++visits};`);
+    }
     let file = join(root, path === "/" ? "index.html" : path);
     // "/cart" is cart.html, as most servers of static sites have it
     if (!existsSync(file) && existsSync(`${file}.html`)) file = `${file}.html`;

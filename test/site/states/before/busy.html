@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Busy</title>
+<style>body { font: 16px/1.5 system-ui, sans-serif; margin: 40px; color: #18181b; } button { font: inherit; padding: 8px 16px; }</style>
+</head>
+<body>
+<h1>Busy</h1>
+<button id="freeze">Freeze</button>
+<script>
+  // A moment after the click the page stops answering: a script that never ends
+  freeze.addEventListener("click", () => setTimeout(() => { for (;;) {} }, 300));
+</script>
+</body>
+</html>

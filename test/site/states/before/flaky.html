@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Flaky</title>
+<style>body { font: 16px/1.5 system-ui, sans-serif; margin: 40px; color: #18181b; } button { font: inherit; padding: 8px 16px; }</style>
+</head>
+<body>
+<h1>Flaky</h1>
+<p id="here">The button is here on some visits.</p>
+<script>
+  // Counted per context, so every run starts again at the first visit
+  const visit = Number(localStorage.getItem("visit") ?? 0) + 1;
+  localStorage.setItem("visit", visit);
+  if (true) {
+    const button = document.createElement("button");
+    button.textContent = "Open";
+    button.addEventListener("click", () => here.insertAdjacentHTML("afterend", "<h2>Opened</h2>"));
+    here.after(button);
+  }
+</script>
+</body>
+</html>
