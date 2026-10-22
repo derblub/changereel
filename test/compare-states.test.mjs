@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -17,8 +18,9 @@ const chrome = [process.env.CHROME_PATH, "/usr/bin/google-chrome-stable", "/usr/
   (path) => path && existsSync(path),
 );
 
-// A value that cannot turn up by chance: if it is anywhere in what a run leaves, it leaked
-const SECRET = "Zebra-7731-Quokka";
+// A value that cannot turn up by chance: if it is anywhere in what a run leaves, it leaked.
+// Made anew on every run, so that no password-like text sits in the repository
+const SECRET = `canary-${randomUUID()}`;
 const ENV = { CHANGEREEL_TEST_PASSWORD: SECRET };
 
 /** The command, run apart: its exit code and everything it printed. */
