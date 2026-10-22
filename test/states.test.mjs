@@ -488,9 +488,9 @@ describe("states in the summary, the comment and the scenes", () => {
 
   test("the line under a scene says which step stopped, in English and German", () => {
     const scene = { type: "unreached", page: true, state: "Checkout dialog", steps: 2, stopped: unreached.stopped };
-    assert.equal(stopLine(scene, TEXTS.en), "Step 1 of 2 stopped: click button “Checkout”, not found");
-    assert.equal(stopLine(scene, TEXTS.de), "Schritt 1 von 2 gescheitert: click button „Checkout“, nicht gefunden");
-    assert.equal(stopLine({ ...scene, stopped: gone.stopped }, TEXTS.en), "The page is not there: HTTP 404");
+    assert.equal(stopLine(scene, TEXTS.en), "After, step 1 of 2 stopped: click button “Checkout”, not found");
+    assert.equal(stopLine(scene, TEXTS.de), "Nachher scheiterte Schritt 1 von 2: click button „Checkout“, nicht gefunden");
+    assert.equal(stopLine({ ...scene, stopped: gone.stopped }, TEXTS.en), "After, the page was not there: HTTP 404");
     const now = { ...scene, type: "reached", stopped: reached.stopped };
     assert.equal(stopLine(now, TEXTS.en), "Before, step 1 of 2 stopped: click button “Export”, not found");
     assert.equal(stopLine(now, TEXTS.de), "Vorher scheiterte Schritt 1 von 2: click button „Export“, nicht gefunden");

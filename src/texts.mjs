@@ -28,16 +28,17 @@ export const TEXTS = {
     of: (changed, pages) => `${changed} of ${pages}`,
     quote: (text) => String(text).replace(/"([^"]*)"/g, "“$1”"),
     reason: (reason) => reason,
-    // The line under a state that is reached on one side only: "Step 1 of 2 stopped: click button “Checkout”, not found".
-    // A state reached only now stopped before: the line says so, since the picture is of after
+    // The line under a state that is reached on one side only: "After, step 1 of 2 stopped: click button “Checkout”, not found".
+    // The line names the version that stopped: the scene shows both pictures, and under the
+    // one of the other version "not found" would point at a button that is plainly there
     stopped: (stop, steps, t) =>
       stop.side === "before"
         ? stop.step === null
           ? `Before, the page was not there: ${stop.reason}`
           : `Before, step ${stop.step + 1} of ${steps} stopped: ${t.quote(stop.does)}, ${t.reason(stop.reason)}`
         : stop.step === null
-          ? `The page is not there: ${stop.reason}`
-          : `Step ${stop.step + 1} of ${steps} stopped: ${t.quote(stop.does)}, ${t.reason(stop.reason)}`,
+          ? `After, the page was not there: ${stop.reason}`
+          : `After, step ${stop.step + 1} of ${steps} stopped: ${t.quote(stop.does)}, ${t.reason(stop.reason)}`,
     loginStopped: (stop, t) => `The login stopped on the version ${stop.side}: step ${stop.step + 1}, ${t.quote(stop.does)}, ${t.reason(stop.reason)}`,
     plain: {
       page: { added: (route) => `The page ${route} was added.`, removed: (route) => `The page ${route} was removed.` },
@@ -84,8 +85,8 @@ export const TEXTS = {
           ? `Vorher fehlte die Seite: ${stop.reason}`
           : `Vorher scheiterte Schritt ${stop.step + 1} von ${steps}: ${t.quote(stop.does)}, ${t.reason(stop.reason)}`
         : stop.step === null
-          ? `Die Seite fehlt: ${stop.reason}`
-          : `Schritt ${stop.step + 1} von ${steps} gescheitert: ${t.quote(stop.does)}, ${t.reason(stop.reason)}`,
+          ? `Nachher fehlte die Seite: ${stop.reason}`
+          : `Nachher scheiterte Schritt ${stop.step + 1} von ${steps}: ${t.quote(stop.does)}, ${t.reason(stop.reason)}`,
     loginStopped: (stop, t) =>
       `Die Anmeldung brach in der ${stop.side === "after" ? "neuen" : "alten"} Version ab: Schritt ${stop.step + 1}, ${t.quote(stop.does)}, ${t.reason(stop.reason)}`,
     plain: {

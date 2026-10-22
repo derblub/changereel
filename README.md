@@ -146,7 +146,7 @@ Good to know:
 - Each visit reaches the state anew, and a page is visited `--passes` times and again when it shows a change. Steps that change data on the server (an order, a message) change it every time, so keep the steps to what only looks.
 - A `value` in the file is not secret: a `fill` that stops is described with it, in the log, the report and the video. Use `valueFrom` for anything that is.
 - When both versions talk to the same backend, a change the steps make on one shows on the other.
-- The steps run on every visit, so a state takes longer than a page. The log ends with how long the states took.
+- The steps run on every visit, so a state takes longer than a page: on the sample roastery in `docs/demo`, about 15 seconds for a state reached on both versions and about 40 for one reached on one only, which is visited again before it counts. The log ends with how long the states took.
 
 ## In a pull request
 
