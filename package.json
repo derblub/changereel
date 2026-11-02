@@ -37,8 +37,8 @@
     "diff": "^9.0.0",
     "pixelmatch": "^8.0.0",
     "pngjs": "^7.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "remotion": "4.0.539"
   },
   "author": "Daniel Kurdoghlian, Pushing Pixels (https://pushingpixels.at)",
