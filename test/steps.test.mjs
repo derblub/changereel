@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { openBrowser } from "../src/browser.mjs";
 import { cssString, runSteps } from "../src/steps.mjs";
+import { DEFAULT_TIMEOUT_MS } from "../src/states.mjs";
 import { serve } from "./serve.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -13,8 +14,16 @@ const chrome = [process.env.CHROME_PATH, "/usr/bin/google-chrome-stable", "/usr/
   (path) => path && existsSync(path),
 );
 
-// Steps as readStates gives them, with a short time so that a stop does not hold the tests up
-const steps = (...list) => list.map((step) => ({ timeoutMs: 3000, ...step, ...(step.action === "waitFor" && { state: step.state ?? "visible" }) }));
+// Two limits by purpose. A step whose stop is expected gets a short time so that the stop does not hold the tests up.
+// A step that has to succeed (a login, a page load) ends as soon as it is reached, so it gets the normal limit of a
+// state file: the first load after the browser starts can take seconds when other test files load the machine.
+const STOP_MS = 3000;
+const steps = (...list) =>
+  list.map((step) => ({
+    timeoutMs: step.action === "navigate" ? DEFAULT_TIMEOUT_MS : STOP_MS,
+    ...step,
+    ...(step.action === "waitFor" && { state: step.state ?? "visible" }),
+  }));
 const button = (name, nth) => ({ role: "button", name, ...(nth !== undefined && { nth }) });
 
 describe("states", { skip: !chrome && "no Chromium" }, () => {
@@ -33,12 +42,13 @@ describe("states", { skip: !chrome && "no Chromium" }, () => {
     is?.close();
   });
 
+  // The login has to succeed, so none of its steps gets the short limit of an expected stop
   const login = steps(
     { action: "navigate", path: "/login" },
-    { action: "fill", target: { label: "Email" }, value: "ada@example.com" },
-    { action: "fill", target: { label: "Password" }, valueFrom: { env: "CHANGEREEL_TEST_PASSWORD" } },
-    { action: "press", key: "Enter" },
-    { action: "waitFor", target: button("Log out") },
+    { action: "fill", target: { label: "Email" }, value: "ada@example.com", timeoutMs: DEFAULT_TIMEOUT_MS },
+    { action: "fill", target: { label: "Password" }, valueFrom: { env: "CHANGEREEL_TEST_PASSWORD" }, timeoutMs: DEFAULT_TIMEOUT_MS },
+    { action: "press", key: "Enter", timeoutMs: DEFAULT_TIMEOUT_MS },
+    { action: "waitFor", target: button("Log out"), timeoutMs: DEFAULT_TIMEOUT_MS },
   );
   const env = { CHANGEREEL_TEST_PASSWORD: "secret" };
 
@@ -93,7 +103,7 @@ describe("states", { skip: !chrome && "no Chromium" }, () => {
   test("two buttons of one name need nth, and nth picks in document order", async () => {
     const add = (nth) =>
       steps({ action: "click", target: button("Add", nth), timeoutMs: 500 }, { action: "waitFor", target: { css: "#out" } });
-    const both = await browser.run("before", [{ action: "navigate", path: "/twins", timeoutMs: 3000 }, ...add()], { base: was.url });
+    const both = await browser.run("before", [{ action: "navigate", path: "/twins", timeoutMs: DEFAULT_TIMEOUT_MS }, ...add()], { base: was.url });
     assert.deepEqual(both, { reached: false, step: 1, reason: "found 2; add nth to pick one" });
     const { stopped } = await browser.capture(was.url + "/twins", { steps: add(1) });
     assert.equal(stopped, undefined);
