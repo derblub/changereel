@@ -22,7 +22,19 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm ci
+      # Where the tests keep the output of their runs, so a red run can be looked at
+      - run: mkdir -p "$CHANGEREEL_TEST_OUT"
+        env:
+          CHANGEREEL_TEST_OUT: ${{ runner.temp }}/test-out
       - run: npm test
+        env:
+          CHANGEREEL_TEST_OUT: ${{ runner.temp }}/test-out
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: test-out-node${{ matrix.node }}
+          path: ${{ runner.temp }}/test-out
+          retention-days: 7
 
   # The action itself, on a repository made here from the two sample sites of the tests:
   # one commit with the site before, one with the site after. It has to find the six

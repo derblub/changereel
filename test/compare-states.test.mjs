@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, before, describe, test } from "node:test";
@@ -30,6 +30,13 @@ function run(args, { env = {}, cwd } = {}) {
       ok({ code: err ? err.code : 0, stdout, stderr }),
     );
   });
+}
+
+/** A fresh directory for the output of a run. CI sets CHANGEREEL_TEST_OUT, so a red run leaves it to be uploaded. */
+function outDir() {
+  const base = process.env.CHANGEREEL_TEST_OUT;
+  if (base) mkdirSync(base, { recursive: true });
+  return mkdtempSync(join(base ?? tmpdir(), "changereel-test-"));
 }
 
 /** A states file in a fresh directory. */
@@ -111,12 +118,12 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
 
   const options = (file, ...more) =>
     parseArgs(
-      ["--before", was.url, "--after", is.url, "--states", file, "--out", mkdtempSync(join(tmpdir(), "changereel-test-")), "--no-video", "--wait", "0", "--passes", "1", ...more],
+      ["--before", was.url, "--after", is.url, "--states", file, "--out", outDir(), "--no-video", "--wait", "0", "--passes", "1", ...more],
       ENV,
     );
 
   test("the command: logs in, compares routes and states in order, reports what stopped, ends with 2 for a state reached nowhere", async () => {
-    const out = mkdtempSync(join(tmpdir(), "changereel-test-"));
+    const out = outDir();
     const started = Date.now();
     const summary = join(out, "summary.md");
     const result = await run(
@@ -245,7 +252,7 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
   });
 
   test("a login form sent with GET puts the password in the address: the finding keeps its path only", async () => {
-    const out = mkdtempSync(join(tmpdir(), "changereel-test-"));
+    const out = outDir();
     const file = join(HERE, "site", "states", "get-login.states.json");
     const result = await run(
       ["--before", was.url, "--after", is.url, "--states", file, "--routes", "/account", "--out", out, "--no-video", "--wait", "0", "--passes", "1", "--confirm", "0"],
