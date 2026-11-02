@@ -22,7 +22,7 @@ import { PNG } from "pngjs";
 import { openBrowser } from "./browser.mjs";
 import { addChapters, chapters } from "./chapters.mjs";
 import { changeCell, counted, notCompared, pageCell, setupLines } from "./comment.mjs";
-import { diffPages, nearNoise, noiseBoxes, onlyNoise, paint } from "./diff.mjs";
+import { bordersNoise, diffPages, nearNoise, noiseBoxes, onlyNoise, paint } from "./diff.mjs";
 import { kokoroVoice, narrate } from "./narrate.mjs";
 import { collectRoutes, slug } from "./routes.mjs";
 import { describeStep, readStates } from "./states.mjs";
@@ -205,6 +205,15 @@ function wholePage(type, name, { before, after }, options) {
   };
 }
 
+/**
+ * The changes that lie right beside the noise of their page (`bordersNoise`): known to
+ * `compareOne`, which visits their page again, and never written out.
+ */
+const bordering = new WeakSet();
+
+/** How many more rounds of visits changes beside noise get, at most. */
+const MORE_ROUNDS = 3;
+
 /** The changes between two sides that are both there, with the noise of their visits left out. */
 function differences(name, { before, after }, options, page) {
   const found = [];
@@ -241,6 +250,7 @@ function differences(name, { before, after }, options, page) {
       ) {
         continue;
       }
+      const noisy = (was.noise.length || is.noise.length) && bordersNoise(...pictures(), change, was.noise, is.noise);
       found.push({
         ...change,
         layer: was.name,
@@ -255,9 +265,39 @@ function differences(name, { before, after }, options, page) {
           : {}),
         view,
       });
+      if (noisy) bordering.add(found.at(-1));
     }
   }
   return found;
+}
+
+/** How many noise boxes each layer of both sides has, to tell later which ones are new. */
+const noiseCounts = (sides) => new Map(["before", "after"].flatMap((which) => sides[which].layers.map((layer) => [layer, layer.noise.length])));
+
+const overlaps = (one, two) => one.x < two.x + two.width && two.x < one.x + one.width && one.y < two.y + two.height && two.y < one.y + one.height;
+const inside = (one, two) => one.x >= two.x && one.y >= two.y && one.x + one.width <= two.x + two.width && one.y + one.height <= two.y + two.height;
+
+/**
+ * Whether the visits since `counts` (from `noiseCounts`) found noise that was not known where
+ * one of `changes` is: a new box, not inside one from before, over the band and the box of a
+ * change on its side. A number whose first digits stay as they are on every visit gives boxes
+ * from the same digit on, and nothing new.
+ */
+function learned(sides, counts, changes) {
+  return ["before", "after"].some((which) =>
+    sides[which].layers.some((layer) => {
+      const known = layer.noise.slice(0, counts.get(layer));
+      return layer.noise.slice(counts.get(layer)).some((box) => {
+        if (known.some((old) => inside(box, old))) return false;
+        const on = { ...box, x: box.x + layer.x, y: box.y + layer.y };
+        return changes.some((change) => {
+          const framed = which === "after" ? change.box : (change.boxBefore ?? change.box);
+          const place = { x: framed?.x ?? 0, y: change[`${which}Y`], width: framed?.width ?? Infinity, height: change[`${which}H`] };
+          return overlaps(on, place);
+        });
+      });
+    }),
+  );
 }
 
 /** The path in the file of a step of a state, or of its route for `null`: in the scenario, for a state read from one. */
@@ -333,6 +373,21 @@ async function compareOne(browser, options, shots, name, route, state, index) {
       await revisit(browser, before, options);
       await revisit(browser, after, options);
       page.changes = differences(name, sides, options, page);
+    }
+    // A random number whose first two digits came up alike on every visit of each side, and
+    // otherwise on the other side, leaves those digits right beside its noise. With two visits
+    // that cannot be told from a label that changed next to the number. So while every change
+    // left lies beside noise, both sides are visited again, as long as a round finds noise
+    // that was not known over them: a number shows its first digits change then, a label does
+    // not, and stays a change. Like confirming, not with --confirm 0.
+    const besideNoise = () => page.changes.length && page.changes.every((change) => bordering.has(change));
+    for (let round = 0; round < MORE_ROUNDS && options.confirm && besideNoise(); round++) {
+      const counts = noiseCounts(sides);
+      await revisit(browser, before, options);
+      await revisit(browser, after, options);
+      const more = learned(sides, counts, page.changes);
+      page.changes = differences(name, sides, options, page);
+      if (!more) break;
     }
   }
   if (!state) return { page };

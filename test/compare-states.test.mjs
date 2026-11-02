@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -37,6 +38,35 @@ function outDir() {
   const base = process.env.CHANGEREEL_TEST_OUT;
   if (base) mkdirSync(base, { recursive: true });
   return mkdtempSync(join(base ?? tmpdir(), "changereel-test-"));
+}
+
+/**
+ * A site with the page of a random code whose codes are known: each click on "Show code" shows
+ * the next of `codes`, and the last again when they run out.
+ */
+async function codeSite(codes) {
+  const page = readFileSync(join(HERE, "site", "states", "before", "random.html"), "utf8")
+    .replace('addEventListener("click", () =>', 'addEventListener("click", async () =>')
+    .replace("String(Math.random()).slice(2, 8)", 'await (await fetch("/next")).text()');
+  let next = 0;
+  const server = createServer((request, response) => {
+    if (request.url === "/next") {
+      response.writeHead(200, { "Content-Type": "text/plain", "Cache-Control": "no-store" });
+      return response.end(codes[Math.min(next++, codes.length - 1)]);
+    }
+    if (request.url !== "/random") return response.writeHead(404).end("Not found");
+    response.writeHead(200, { "Content-Type": "text/html" });
+    response.end(page);
+  });
+  await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
+  return {
+    url: `http://127.0.0.1:${server.address().port}`,
+    shown: () => next,
+    close: () => {
+      server.closeAllConnections();
+      server.close();
+    },
+  };
 }
 
 /** A states file in a fresh directory. */
@@ -330,6 +360,43 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
     const stop = { path: "states[1].route", does: "load /nowhere", reason: "HTTP 404", text: "states[1].route load /nowhere: HTTP 404" };
     assert.deepEqual(problems, [{ name: "Gone", route: "/nowhere", before: stop, after: stop }]);
     assert.ok(lines.includes(`? /nowhere › Gone  not compared: before: ${stop.text}; after: ${stop.text}`), lines.join("\n"));
+  });
+
+  /**
+   * The command over the state "Code" of two sites that show these codes: what it says of the
+   * state, and how many codes each side showed. Run apart, as the sites answer from this process.
+   */
+  async function codes(before, after) {
+    const sites = [await codeSite(before), await codeSite(after)];
+    try {
+      const file = statesFile({
+        schemaVersion: 1,
+        timeoutMs: 1500,
+        states: [{ name: "Code", route: "/random", steps: [{ action: "click", target: { role: "button", name: "Show code" } }, { action: "waitFor", target: { role: "dialog", name: "Code" } }] }],
+      });
+      const result = await run(
+        ["--before", sites[0].url, "--after", sites[1].url, "--states", file, "--routes", "/random", "--out", outDir(), "--no-video", "--wait", "0", "--passes", "1", "--confirm", "1"],
+        { env: ENV },
+      );
+      assert.equal(result.code, 0, result.stderr);
+      return { line: result.stdout.split("\n").find((line) => line.includes("› Code")), shown: sites.map((site) => site.shown()) };
+    } finally {
+      for (const site of sites) site.close();
+    }
+  }
+
+  test("a random code whose first two digits came up alike on each side is visited again until it shows as noise", async () => {
+    // Two visits a side, and only the last four digits change: what is left is "11" against
+    // "99", right beside the noise. The third visit changes the first digits as well
+    const { line, shown } = await codes(["112345", "116789", "534567"], ["992345", "996789", "427180"]);
+    assert.match(line, /^= \/random › Code/);
+    assert.deepEqual(shown, [3, 3]);
+  });
+
+  test("a code that begins otherwise on every visit of a side stays a change, after more visits", async () => {
+    const { line, shown } = await codes(["112345", "116789", "113456", "117890", "118901"], ["992345", "996789", "993456", "997890", "998901"]);
+    assert.match(line, /^≠ \/random › Code {2}1 change/);
+    assert.ok(shown.every((count) => count > 2), String(shown));
   });
 
   test("a login that fails on its first try gets through on the next, in a fresh context", async () => {

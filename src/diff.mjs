@@ -473,19 +473,13 @@ export function paint(buffer, boxes) {
 }
 
 /**
- * Whether a change is only the noise of its two sides, painted over in different places. Each
- * side learns its noise from its own visits: a random number whose first digit came up the
- * same twice on one side is painted from the second digit there and from the first on the
- * other, and the strip between is a difference that no box of either side covers. With the
- * noise of both sides painted on both, the band of the change holds nothing else.
- *
- * The pictures are PNG buffers, or pictures decoded already (`PNG.sync.read`), so that a page
- * with many changes is decoded once. They are not changed: the painting is done on copies of
- * the rows of the band.
+ * The band of a change on both sides, with the noise of both sides painted on both: copies of
+ * its rows, and the boxes as rows of the band. Null when the band has another height on each
+ * side, or there is no noise.
  */
-export function onlyNoise(beforePicture, afterPicture, change, beforeBoxes, afterBoxes, minPixels = 40) {
-  if (!beforeBoxes?.length && !afterBoxes?.length) return false;
-  if (!change.beforeH || change.beforeH !== change.afterH) return false;
+function paintedBand(beforePicture, afterPicture, change, beforeBoxes, afterBoxes) {
+  if (!beforeBoxes?.length && !afterBoxes?.length) return null;
+  if (!change.beforeH || change.beforeH !== change.afterH) return null;
   const decode = (picture) => (Buffer.isBuffer(picture) ? PNG.sync.read(picture) : picture);
   const before = crop(decode(beforePicture), change.beforeY, change.beforeH);
   const after = crop(decode(afterPicture), change.afterY, change.afterH);
@@ -502,8 +496,51 @@ export function onlyNoise(beforePicture, afterPicture, change, beforeBoxes, afte
       }
     }
   }
-  const box = changedBox(before, after, { beforeY: 0, afterY: 0, beforeH: change.beforeH, afterH: change.afterH });
+  // Both sides hold the same boxes, so those of one are those of the band
+  const rows = boxes.before.map((box) => ({ ...box, y: box.y - change.beforeY }));
+  return { before, after, boxes: rows, band: { beforeY: 0, afterY: 0, beforeH: change.beforeH, afterH: change.afterH } };
+}
+
+/**
+ * Whether a change is only the noise of its two sides, painted over in different places. Each
+ * side learns its noise from its own visits: a random number whose first digit came up the
+ * same twice on one side is painted from the second digit there and from the first on the
+ * other, and the strip between is a difference that no box of either side covers. With the
+ * noise of both sides painted on both, the band of the change holds nothing else.
+ *
+ * The pictures are PNG buffers, or pictures decoded already (`PNG.sync.read`), so that a page
+ * with many changes is decoded once. They are not changed: the painting is done on copies of
+ * the rows of the band.
+ */
+export function onlyNoise(beforePicture, afterPicture, change, beforeBoxes, afterBoxes, minPixels = 40) {
+  const painted = paintedBand(beforePicture, afterPicture, change, beforeBoxes, afterBoxes);
+  if (!painted) return false;
+  const box = changedBox(painted.before, painted.after, painted.band);
   return !box || box.pixels < minPixels;
+}
+
+/**
+ * Whether what is left of a change, with the noise of both sides painted on both, lies right
+ * beside a noisy spot: in rows of a box, and at most `reach` columns from it, or in it. A
+ * random number whose first two digits came up alike on both visits of each side, and
+ * otherwise on the other side, leaves those two digits next to its box. Two visits cannot
+ * tell that from a label that changed beside the number; more visits can, so such a change
+ * is not left out but asks for them. What is left of such a number ends in the column next
+ * to its box, as the box begins inside the last digit that came up alike; `reach` allows one
+ * more for an edge that came out alike. A change further away is a change of its own. Takes
+ * the pictures as `onlyNoise` does.
+ */
+export function bordersNoise(beforePicture, afterPicture, change, beforeBoxes, afterBoxes, reach = 1) {
+  const painted = paintedBand(beforePicture, afterPicture, change, beforeBoxes, afterBoxes);
+  if (!painted) return false;
+  const rest = changedBox(painted.before, painted.after, painted.band);
+  if (!rest) return false;
+  return painted.boxes.some((box) => {
+    const rows = Math.min(rest.y + rest.height, box.y + box.height) - Math.max(rest.y, box.y);
+    // Columns between the two; below 0 where they overlap
+    const apart = Math.max(box.x - (rest.x + rest.width), rest.x - (box.x + box.width));
+    return rows > 0 && apart <= reach;
+  });
 }
 
 /**

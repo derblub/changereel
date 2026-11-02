@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { cpSync, symlinkSync, writeFileSync } from "node:fs";
 import { compare, parseArgs, renderMarkdown, toScenes } from "../src/cli.mjs";
 import { serveVersions } from "../src/versions.mjs";
-import { alignRows, diffPages, drawnSpan, mergeRuns, nearNoise, noiseBoxes, onlyNoise, paint, trimBlank } from "../src/diff.mjs";
+import { alignRows, bordersNoise, diffPages, drawnSpan, mergeRuns, nearNoise, noiseBoxes, onlyNoise, paint, trimBlank } from "../src/diff.mjs";
 import { collectRoutes, parseSitemap, slug, toRoute } from "../src/routes.mjs";
 import { serve } from "./serve.mjs";
 
@@ -215,6 +215,33 @@ describe("noise", () => {
     assert.equal(onlyNoise(...decoded, changes[0], was, is), true);
     assert.equal(onlyNoise(decoded[0], PNG.sync.read(paint(renamed, is)), change, was, is), false);
     decoded.forEach((png, i) => assert.equal(Buffer.compare(png.data, copies[i]), 0));
+  });
+
+  test("bordersNoise: the first two digits of a random number, alike on each side, lie beside its noise; a label does not", () => {
+    // Four digits; on both visits of a side the first two are the same, and they differ
+    // between the sides: each side paints from the third digit on
+    const label = [10, 20, BLUE];
+    const number = (one, two, ...rest) => [[40, 10, one], [50, 10, two], ...rest.map((colour, i) => [60 + i * 10, 10, colour])];
+    const before = [row(label, ...number(RED, RED, GREEN, BLUE)), row(label, ...number(RED, RED, BLUE, GREEN))];
+    const after = [row(label, ...number(GREEN, GREEN, GREEN, BLUE)), row(label, ...number(GREEN, GREEN, BLUE, GREEN))];
+    const was = noiseBoxes(...before);
+    const is = noiseBoxes(...after);
+    const pictures = [paint(before[0], was), paint(after[0], is)];
+    const [change, ...more] = diffPages(...pictures).changes;
+    assert.deepEqual(more, []);
+    // More is left than a hairline, so it is not only noise; but it ends where the boxes begin
+    assert.equal(onlyNoise(...pictures, change, was, is), false);
+    assert.equal(bordersNoise(...pictures, change, was, is), true);
+    assert.equal(bordersNoise(...pictures, change, [], []), false);
+    // A label that changed 10 pixels from a number: the box, 8 pixels wider than the digits,
+    // leaves 2 columns between, more than the one column `reach` allows
+    const visits = [row(label, ...number(RED, GREEN, RED)), row(label, ...number(GREEN, RED, GREEN))];
+    const renamed = [row([10, 20, GREEN], ...number(BLUE, RED, RED)), row([10, 20, GREEN], ...number(BLUE, GREEN, GREEN))];
+    const noise = [noiseBoxes(...visits), noiseBoxes(...renamed)];
+    const painted = [paint(visits[0], noise[0]), paint(renamed[0], noise[1])];
+    const [relabelled] = diffPages(...painted).changes;
+    assert.equal(onlyNoise(...painted, relabelled, ...noise), false);
+    assert.equal(bordersNoise(...painted, relabelled, ...noise), false);
   });
 
   test("nearNoise: a large change with a hairline of noise inside it stays", () => {
