@@ -11,3 +11,7 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    groups:
+      # react and react-dom must stay on the same version: a split bump fails the render (React error #527).
+      react:
+        patterns: ["react", "react-dom"]
